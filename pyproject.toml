@@ -6,7 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "opentenbase-pluginctl"
 version = "0.1.0"
 description = "CLI-first lifecycle governance tool for OpenTenBase distributed plugins"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { file = "LICENSE" }
 authors = [{ name = "Codex" }]
 dependencies = [
     "PyYAML>=6.0",
