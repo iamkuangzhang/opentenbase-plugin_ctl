@@ -1,12 +1,14 @@
-# DataNexus for OpenTenBase
+# OpenTenBase PluginCtl
 
 [中文](#中文) | [English](#english)
 
 ## 中文
 
-DataNexus for OpenTenBase 是一个面向 OpenTenBase 的 CLI 优先分布式插件生命周期管理平台。
+OpenTenBase PluginCtl 是一个面向 OpenTenBase 分布式插件的 CLI 优先生命周期治理工具。
 
 它的目标不是做通用数据库运维平台，也不是插件市场，而是把 OpenTenBase 插件从“能安装”推进到“可检查、可计划、可验证、可回滚、可追踪”的治理闭环。
+
+本项目基于 DataNexus 插件治理模型构建。
 
 ## 当前定位
 
@@ -164,9 +166,11 @@ JSON 输出保持英文 key，便于自动化集成。
 
 ## English
 
-DataNexus for OpenTenBase is a CLI-first distributed plugin lifecycle management platform for OpenTenBase.
+OpenTenBase PluginCtl is a CLI-first lifecycle governance tool for OpenTenBase distributed plugins.
 
 It is not a general database operations platform and not a plugin marketplace. Its focus is plugin governance: making OpenTenBase plugins inspectable, plannable, verifiable, rollback-aware, and traceable.
+
+It is built on the DataNexus plugin governance model.
 
 ## Positioning
 
