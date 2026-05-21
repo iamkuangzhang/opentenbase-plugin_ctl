@@ -90,17 +90,44 @@ recipes/
 
 `dnx_smoke_plugin` 是平台生命周期验证插件。它足够简单、安全，可以重复 deploy、verify、rollback。
 
-`otb_timeseries` 是真实 OpenTenBase 插件载荷。当前平台可识别其已安装状态，并可执行 smoke verify；但它没有破坏性 rollback，chunk distribution warning 仍作为独立问题跟踪。
+`otb_timeseries` 是真实 OpenTenBase 插件载荷的 reference manifest。当前发布仓库不携带旧项目中的完整 `src/otb_timeseries` 载荷，因此它可以展示 runtime installed state 和分布式治理视角，但不能证明完整干净安装链路。它没有破坏性 rollback，chunk distribution warning 仍作为独立问题跟踪。
+
+## 安装
+
+要求：
+
+- Python 3.10+
+- Docker
+- 本地 OpenTenBase Docker 环境，真实生命周期验证需要通过 `opentenbaseDN1` 连接 `127.0.0.1:30004`
+
+推荐安装：
+
+```bash
+git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
+cd opentenbase-pluginctl
+python -m pip install -e .
+```
+
+安装后可使用：
+
+```bash
+opentenbase-pluginctl list
+datanexus list
+python -m datanexus list
+```
 
 ## 推荐使用流程
 
+5 分钟试用：
+
 ```bash
+python -m datanexus list
 python -m datanexus plugin lint dnx_smoke_plugin
 python -m datanexus plugin plan dnx_smoke_plugin
 python -m datanexus plugin precheck dnx_smoke_plugin
-python -m datanexus plugin diagnose dnx_smoke_plugin
 python -m datanexus deploy dnx_smoke_plugin
 python -m datanexus verify dnx_smoke_plugin
+python -m datanexus plugin diagnose dnx_smoke_plugin
 python -m datanexus report
 ```
 
@@ -113,6 +140,13 @@ python -m datanexus verify dnx_smoke_plugin --removed
 ```
 
 `rollback` 默认是 dry-run。只有显式传入 `--execute` 才会执行 manifest 声明的 `rollback_sql`。
+
+## 安全边界
+
+- 只读命令：`list / inspect / plugin lint / plugin plan / plugin precheck / plugin diagnose / plugin roles / plugin consistency / plugin archive / plugins status / doctor / cluster status / report / state`。
+- 会修改数据库或本地状态的命令：`deploy / verify / rollback --execute / verify --removed`。
+- role hooks 当前只进入 plan、roles、diagnose、archive 和 consistency，不会自动执行。未来如支持执行，必须使用显式参数，例如 `--execute-hooks`。
+- rollback 是 best-effort，因为数据库对象、函数、schema、分布式表和节点状态不一定能被一个脚本完全恢复。
 
 ## 本地运行
 
@@ -162,6 +196,7 @@ JSON 输出保持英文 key，便于自动化集成。
 - [M2_PLUGIN_GOVERNANCE.md](docs/M2_PLUGIN_GOVERNANCE.md)
 - [M2_GOVERNANCE_FLOW.md](docs/M2_GOVERNANCE_FLOW.md)
 - [M3_ARCHIVE_AND_CONSISTENCY.md](docs/M3_ARCHIVE_AND_CONSISTENCY.md)
+- [M4_RELEASE_QUALITY.md](docs/M4_RELEASE_QUALITY.md)
 
 ## 当前边界
 
@@ -263,17 +298,44 @@ recipes/
 
 `dnx_smoke_plugin` is the platform lifecycle validation plugin. It is small, safe, and repeatable for deploy, verify, and rollback.
 
-`otb_timeseries` is a real OpenTenBase plugin payload. DataNexus can detect its installed state and run smoke verification. It does not have destructive rollback support, and its chunk distribution warning is tracked separately.
+`otb_timeseries` is a reference manifest for a real OpenTenBase plugin payload. The published repository does not bundle the old `src/otb_timeseries` payload, so it can show runtime installed state and distributed governance, but it does not prove a clean full install path. It does not have destructive rollback support, and its chunk distribution warning is tracked separately.
+
+## Installation
+
+Requirements:
+
+- Python 3.10+
+- Docker
+- Local OpenTenBase Docker environment. Real lifecycle validation connects through `opentenbaseDN1` at `127.0.0.1:30004`.
+
+Recommended install:
+
+```bash
+git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
+cd opentenbase-pluginctl
+python -m pip install -e .
+```
+
+Available entrypoints:
+
+```bash
+opentenbase-pluginctl list
+datanexus list
+python -m datanexus list
+```
 
 ## Recommended Flow
 
+Five-minute trial:
+
 ```bash
+python -m datanexus list
 python -m datanexus plugin lint dnx_smoke_plugin
 python -m datanexus plugin plan dnx_smoke_plugin
 python -m datanexus plugin precheck dnx_smoke_plugin
-python -m datanexus plugin diagnose dnx_smoke_plugin
 python -m datanexus deploy dnx_smoke_plugin
 python -m datanexus verify dnx_smoke_plugin
+python -m datanexus plugin diagnose dnx_smoke_plugin
 python -m datanexus report
 ```
 
@@ -286,6 +348,13 @@ python -m datanexus verify dnx_smoke_plugin --removed
 ```
 
 `rollback` defaults to dry-run. It executes only when `--execute` is explicitly provided and the manifest declares `rollback_sql`.
+
+## Safety Boundary
+
+- Read-only commands: `list / inspect / plugin lint / plugin plan / plugin precheck / plugin diagnose / plugin roles / plugin consistency / plugin archive / plugins status / doctor / cluster status / report / state`.
+- Commands that may modify database or local state: `deploy / verify / rollback --execute / verify --removed`.
+- Role hooks are currently only planned, rendered in roles/diagnose, archived, and checked for consistency. They are not executed automatically. Future execution must require an explicit flag such as `--execute-hooks`.
+- Rollback is best-effort because database objects, functions, schemas, distributed tables, and node state cannot always be fully restored by a single script.
 
 ## Local Usage
 
@@ -335,6 +404,7 @@ Documents:
 - [M2_PLUGIN_GOVERNANCE.md](docs/M2_PLUGIN_GOVERNANCE.md)
 - [M2_GOVERNANCE_FLOW.md](docs/M2_GOVERNANCE_FLOW.md)
 - [M3_ARCHIVE_AND_CONSISTENCY.md](docs/M3_ARCHIVE_AND_CONSISTENCY.md)
+- [M4_RELEASE_QUALITY.md](docs/M4_RELEASE_QUALITY.md)
 
 ## Current Boundaries
 

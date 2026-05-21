@@ -40,74 +40,89 @@ def platform_root() -> Path:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="datanexus")
+    parser = argparse.ArgumentParser(
+        prog="datanexus",
+        description="OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.",
+        epilog=(
+            "command groups: discovery=list/inspect; governance=plugin lint/plan/precheck/diagnose/status/check; "
+            "lifecycle=deploy/verify/rollback; archive=plugin archive list/inspect; "
+            "distributed=plugin roles/consistency; reporting=state/report; runtime=doctor/cluster status"
+        ),
+    )
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--root", type=Path, default=platform_root(), help="platform directory root")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("list", help="list plugin manifests")
+    subparsers.add_parser("list", help="discovery: list plugin manifests")
 
-    inspect_parser = subparsers.add_parser("inspect", help="show a plugin manifest")
+    inspect_parser = subparsers.add_parser("inspect", help="discovery: show a plugin manifest")
     inspect_parser.add_argument("plugin_id")
 
-    doctor_parser = subparsers.add_parser("doctor", help="check local OpenTenBase runtime")
+    doctor_parser = subparsers.add_parser("doctor", help="runtime: check local OpenTenBase runtime")
     doctor_parser.add_argument("--container", default="opentenbaseDN1")
     doctor_parser.add_argument("--host", default="127.0.0.1")
     doctor_parser.add_argument("--port", type=int, default=30004)
     doctor_parser.add_argument("--user", default="opentenbase")
     doctor_parser.add_argument("--database", default="postgres")
 
-    cluster_parser = subparsers.add_parser("cluster", help="inspect local OpenTenBase cluster status")
+    cluster_parser = subparsers.add_parser("cluster", help="runtime: inspect local OpenTenBase cluster status")
     cluster_subparsers = cluster_parser.add_subparsers(dest="cluster_command", required=True)
     cluster_subparsers.add_parser("status", help="read-only local Docker/OpenTenBase status")
 
-    plugin_parser = subparsers.add_parser("plugin", help="plugin governance commands")
+    plugin_parser = subparsers.add_parser("plugin", help="plugin governance, archive, and distributed checks")
     plugin_subparsers = plugin_parser.add_subparsers(dest="plugin_command", required=True)
-    plugin_check_parser = plugin_subparsers.add_parser("check", help="check one plugin governance state")
+    plugin_check_parser = plugin_subparsers.add_parser("check", help="governance: check one plugin governance state")
     plugin_check_parser.add_argument("plugin_id")
     plugin_check_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
-    plugin_status_parser = plugin_subparsers.add_parser("status", help="show one plugin summary")
+    plugin_status_parser = plugin_subparsers.add_parser("status", help="governance: show one plugin summary")
     plugin_status_parser.add_argument("plugin_id")
     plugin_status_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
-    plugin_lint_parser = plugin_subparsers.add_parser("lint", help="lint one plugin package without connecting to database")
+    plugin_lint_parser = plugin_subparsers.add_parser("lint", help="governance: lint one plugin package without connecting to database")
     plugin_lint_parser.add_argument("plugin_id")
     plugin_lint_parser.add_argument("--json", action="store_true", help="emit lint result as JSON")
     plugin_lint_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
-    plugin_plan_parser = plugin_subparsers.add_parser("plan", help="show non-executing lifecycle plan for one plugin")
+    plugin_plan_parser = plugin_subparsers.add_parser("plan", help="governance: show non-executing lifecycle plan for one plugin")
     plugin_plan_parser.add_argument("plugin_id")
     plugin_plan_parser.add_argument("--json", action="store_true", help="emit plan as JSON")
     plugin_plan_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
-    plugin_precheck_parser = plugin_subparsers.add_parser("precheck", help="run read-only pre-deploy checks for one plugin")
+    plugin_precheck_parser = plugin_subparsers.add_parser("precheck", help="governance: run read-only pre-deploy checks for one plugin")
     plugin_precheck_parser.add_argument("plugin_id")
     plugin_precheck_parser.add_argument("--json", action="store_true", help="emit precheck result as JSON")
     plugin_precheck_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
-    plugin_diagnose_parser = plugin_subparsers.add_parser("diagnose", help="aggregate lint, plan, and precheck for one plugin")
+    plugin_diagnose_parser = plugin_subparsers.add_parser("diagnose", help="governance: aggregate lint, plan, and precheck for one plugin")
     plugin_diagnose_parser.add_argument("plugin_id")
     plugin_diagnose_parser.add_argument("--json", action="store_true", help="emit diagnosis result as JSON")
     plugin_diagnose_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
-    plugin_roles_parser = plugin_subparsers.add_parser("roles", help="show plugin role-scoped governance steps")
+    plugin_roles_parser = plugin_subparsers.add_parser("roles", help="distributed: show plugin role-scoped governance steps")
     plugin_roles_parser.add_argument("plugin_id")
     plugin_roles_parser.add_argument("--json", action="store_true", help="emit role mapping as JSON")
-    plugin_consistency_parser = plugin_subparsers.add_parser("consistency", help="run read-only plugin consistency checks")
+    plugin_consistency_parser = plugin_subparsers.add_parser("consistency", help="distributed: run read-only plugin consistency checks")
     plugin_consistency_parser.add_argument("plugin_id")
     plugin_consistency_parser.add_argument("--json", action="store_true", help="emit consistency checks as JSON")
-    plugin_archive_parser = plugin_subparsers.add_parser("archive", help="inspect plugin archive records")
+    plugin_archive_parser = plugin_subparsers.add_parser("archive", help="archive: inspect plugin archive records")
     plugin_archive_subparsers = plugin_archive_parser.add_subparsers(dest="archive_command", required=True)
-    plugin_archive_list_parser = plugin_archive_subparsers.add_parser("list", help="list archived plugin package records")
+    plugin_archive_list_parser = plugin_archive_subparsers.add_parser("list", help="archive: list archived plugin package records")
     plugin_archive_list_parser.add_argument("--json", action="store_true", help="emit archive records as JSON")
-    plugin_archive_inspect_parser = plugin_archive_subparsers.add_parser("inspect", help="inspect one archived plugin package record")
+    plugin_archive_inspect_parser = plugin_archive_subparsers.add_parser("inspect", help="archive: inspect one archived plugin package record")
     plugin_archive_inspect_parser.add_argument("plugin_id")
     plugin_archive_inspect_parser.add_argument("--json", action="store_true", help="emit archive record as JSON")
 
-    plugins_parser = subparsers.add_parser("plugins", help="multi-plugin governance commands")
+    plugins_parser = subparsers.add_parser("plugins", help="governance: multi-plugin governance commands")
     plugins_subparsers = plugins_parser.add_subparsers(dest="plugins_command", required=True)
-    plugins_status_parser = plugins_subparsers.add_parser("status", help="show governance status for all plugins")
+    plugins_status_parser = plugins_subparsers.add_parser("status", help="governance: show governance status for all plugins")
     plugins_status_parser.add_argument("--json", action="store_true", help="emit plugin governance status as JSON")
     plugins_status_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
 
+    command_help = {
+        "deploy": "lifecycle: deploy one plugin package",
+        "verify": "lifecycle: verify one plugin package",
+        "state": "reporting: show local action state",
+        "rollback": "lifecycle: rollback one plugin package; dry-run unless --execute is set",
+        "report": "reporting: show latest action report",
+    }
     for name in ["deploy", "verify", "state", "rollback", "report"]:
-        cmd = subparsers.add_parser(name, help=f"{name} command scaffold")
+        cmd = subparsers.add_parser(name, help=command_help[name])
         if name in {"deploy", "verify", "state", "rollback"}:
             cmd.add_argument("plugin_id", nargs="?")
         if name == "verify":
