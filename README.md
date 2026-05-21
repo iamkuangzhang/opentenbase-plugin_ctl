@@ -49,6 +49,10 @@ python -m datanexus plugin precheck <plugin_id>
 python -m datanexus plugin diagnose <plugin_id>
 python -m datanexus plugin check <plugin_id>
 python -m datanexus plugin status <plugin_id>
+python -m datanexus plugin roles <plugin_id>
+python -m datanexus plugin consistency <plugin_id>
+python -m datanexus plugin archive list
+python -m datanexus plugin archive inspect <plugin_id>
 python -m datanexus plugins status
 python -m datanexus plugins status --json
 ```
@@ -59,6 +63,9 @@ python -m datanexus plugins status --json
 - `plan`：只生成执行计划，最多执行 `installed_probe` 判断是否已安装。
 - `precheck`：部署前只读门禁，检查插件包、连接、版本、目标角色、注册节点和远端临时目录。
 - `diagnose`：聚合 `lint / plan / precheck`，给出是否可部署、是否已安装、下一步建议和主要风险。
+- `roles`：展示插件包按 coordinator / datanode 映射的治理步骤。
+- `consistency`：围绕插件检查 archive、manifest、文件、probe、角色和运行态是否一致。
+- `archive`：查询本地插件包治理快照，不替代 action 级别的 `state/report`。
 
 ## 插件结构
 
@@ -144,6 +151,7 @@ JSON 输出保持英文 key，便于自动化集成。
 - M0：CLI 骨架和基础闭环已冻结。
 - M1：`dnx_smoke_plugin` 完成可重复生命周期验证。
 - M2：插件治理链路已形成：`lint -> plan -> precheck -> diagnose -> deploy -> verify -> report`。
+- M3：开始补齐分布式插件包治理：`archive/state -> roles -> consistency`。
 
 详细文档：
 
@@ -151,6 +159,7 @@ JSON 输出保持英文 key，便于自动化集成。
 - [M1_STATUS.md](docs/M1_STATUS.md)
 - [M2_PLUGIN_GOVERNANCE.md](docs/M2_PLUGIN_GOVERNANCE.md)
 - [M2_GOVERNANCE_FLOW.md](docs/M2_GOVERNANCE_FLOW.md)
+- [M3_ARCHIVE_AND_CONSISTENCY.md](docs/M3_ARCHIVE_AND_CONSISTENCY.md)
 
 ## 当前边界
 
@@ -211,6 +220,10 @@ python -m datanexus plugin precheck <plugin_id>
 python -m datanexus plugin diagnose <plugin_id>
 python -m datanexus plugin check <plugin_id>
 python -m datanexus plugin status <plugin_id>
+python -m datanexus plugin roles <plugin_id>
+python -m datanexus plugin consistency <plugin_id>
+python -m datanexus plugin archive list
+python -m datanexus plugin archive inspect <plugin_id>
 python -m datanexus plugins status
 python -m datanexus plugins status --json
 ```
@@ -221,6 +234,9 @@ Meaning:
 - `plan`: generates a non-executing lifecycle plan. It may run `installed_probe` only to detect install state.
 - `precheck`: runs read-only pre-deploy checks for package files, connectivity, version visibility, target roles, registered nodes, and remote staging readiness.
 - `diagnose`: aggregates `lint / plan / precheck` into a user-facing conclusion, next action, and risk summary.
+- `roles`: shows role-scoped governance steps for coordinator / datanode targets.
+- `consistency`: checks plugin-centered consistency across archive, manifest, package files, probes, roles, and runtime state.
+- `archive`: queries local plugin package governance snapshots. It does not replace action-level `state/report`.
 
 ## Plugin Layout
 
@@ -306,6 +322,7 @@ JSON output keeps stable English keys for automation.
 - M0: CLI skeleton and base loop are frozen.
 - M1: `dnx_smoke_plugin` has completed repeatable lifecycle validation.
 - M2: plugin governance flow is in place: `lint -> plan -> precheck -> diagnose -> deploy -> verify -> report`.
+- M3: distributed plugin package governance has started: `archive/state -> roles -> consistency`.
 
 Documents:
 
@@ -313,6 +330,7 @@ Documents:
 - [M1_STATUS.md](docs/M1_STATUS.md)
 - [M2_PLUGIN_GOVERNANCE.md](docs/M2_PLUGIN_GOVERNANCE.md)
 - [M2_GOVERNANCE_FLOW.md](docs/M2_GOVERNANCE_FLOW.md)
+- [M3_ARCHIVE_AND_CONSISTENCY.md](docs/M3_ARCHIVE_AND_CONSISTENCY.md)
 
 ## Current Boundaries
 

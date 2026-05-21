@@ -59,8 +59,7 @@ class RecordingRuntime:
 
 class DeployTest(unittest.TestCase):
     def load_manifest(self) -> Any:
-        root = Path(__file__).resolve().parents[1]
-        return Catalog(root=root).load_one("otb_timeseries")
+        return self.load_smoke_manifest()
 
     def load_smoke_manifest(self) -> Any:
         root = Path(__file__).resolve().parents[1]
@@ -79,7 +78,7 @@ class DeployTest(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.detail, "already deployed: 1.0.0")
-        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT otb_ts.version();"])
+        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT dnx_smoke_plugin.version();"])
         self.assertEqual(runtime.exec_calls, [])
         self.assertEqual(runtime.copy_calls, [])
         self.assertEqual(runtime.sql_file_calls, [])
@@ -91,12 +90,12 @@ class DeployTest(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.detail, "deploy sql payload passed")
-        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT otb_ts.version();"])
+        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT dnx_smoke_plugin.version();"])
         self.assertEqual(len(runtime.exec_calls), 1)
         self.assertEqual(len(runtime.copy_calls), 1)
         self.assertEqual(runtime.copy_calls[0][0], manifest.source_root)
         self.assertEqual(len(runtime.sql_file_calls), 1)
-        self.assertTrue(runtime.sql_file_calls[0].endswith("/otb_timeseries/core/sql/otb_timeseries--1.0.sql"))
+        self.assertTrue(runtime.sql_file_calls[0].endswith("/payload/sql/install.sql"))
 
     def test_smoke_plugin_deploy_copies_payload_and_runs_install_sql_when_not_installed(self) -> None:
         manifest = self.load_smoke_manifest()

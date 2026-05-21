@@ -45,7 +45,7 @@ class RollbackTest(unittest.TestCase):
                 "source_root": "src/sample_plugin",
                 "install_sql": "src/sample_plugin/install.sql",
                 "verify_sql": "tests/sample.sql",
-                "rollback_sql": str(rollback_sql.relative_to(root)),
+                "rollback_sql": str(rollback_sql.relative_to(root / "platform")),
             },
             path=manifest_path,
         )
@@ -61,7 +61,8 @@ class RollbackTest(unittest.TestCase):
     def test_rollback_with_script_defaults_to_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            rollback_sql = root / "rollback.sql"
+            rollback_sql = root / "platform" / "rollback.sql"
+            rollback_sql.parent.mkdir(parents=True, exist_ok=True)
             rollback_sql.write_text("SELECT 'planned rollback';", encoding="utf-8")
             manifest = self.manifest_with_rollback(root, rollback_sql)
             runtime = RecordingRuntime()
@@ -79,7 +80,8 @@ class RollbackTest(unittest.TestCase):
     def test_rollback_execute_runs_sql_and_returns_success_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            rollback_sql = root / "rollback.sql"
+            rollback_sql = root / "platform" / "rollback.sql"
+            rollback_sql.parent.mkdir(parents=True, exist_ok=True)
             rollback_sql.write_text("SELECT 'execute rollback';", encoding="utf-8")
             manifest = self.manifest_with_rollback(root, rollback_sql)
             runtime = RecordingRuntime()
@@ -96,7 +98,8 @@ class RollbackTest(unittest.TestCase):
     def test_rollback_execute_returns_failure_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            rollback_sql = root / "rollback.sql"
+            rollback_sql = root / "platform" / "rollback.sql"
+            rollback_sql.parent.mkdir(parents=True, exist_ok=True)
             rollback_sql.write_text("SELECT 'execute rollback';", encoding="utf-8")
             manifest = self.manifest_with_rollback(root, rollback_sql)
             runtime = RecordingRuntime(rollback_returncode=1)

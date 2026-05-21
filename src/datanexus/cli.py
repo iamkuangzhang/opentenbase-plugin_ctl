@@ -13,6 +13,8 @@ from .deploy import deploy_sql_payload
 from .doctor import run_doctor
 from .i18n import message, normalize_lang, text, value
 from .manifest import ManifestError
+from .plugin_archive import ArchiveStore, archive_list_json, archive_record_json, build_archive_record
+from .plugin_consistency import consistency_check, consistency_items_json
 from .plugin_diagnose import diagnose_plugin, diagnosis_json, diagnosis_summary_json, diagnosis_rows
 from .plugin_governance import governance_status, governance_status_json, plugin_checks
 from .plugin_package import (
@@ -24,6 +26,7 @@ from .plugin_package import (
     plugin_precheck,
     precheck_items_json,
 )
+from .plugin_roles import role_steps, role_steps_json, role_summary
 from .report import latest_by_plugin_action, latest_by_plugin_action_json, row_for_record
 from .rollback import rollback_plugin
 from .state_store import StateStore
@@ -83,6 +86,19 @@ def build_parser() -> argparse.ArgumentParser:
     plugin_diagnose_parser.add_argument("plugin_id")
     plugin_diagnose_parser.add_argument("--json", action="store_true", help="emit diagnosis result as JSON")
     plugin_diagnose_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
+    plugin_roles_parser = plugin_subparsers.add_parser("roles", help="show plugin role-scoped governance steps")
+    plugin_roles_parser.add_argument("plugin_id")
+    plugin_roles_parser.add_argument("--json", action="store_true", help="emit role mapping as JSON")
+    plugin_consistency_parser = plugin_subparsers.add_parser("consistency", help="run read-only plugin consistency checks")
+    plugin_consistency_parser.add_argument("plugin_id")
+    plugin_consistency_parser.add_argument("--json", action="store_true", help="emit consistency checks as JSON")
+    plugin_archive_parser = plugin_subparsers.add_parser("archive", help="inspect plugin archive records")
+    plugin_archive_subparsers = plugin_archive_parser.add_subparsers(dest="archive_command", required=True)
+    plugin_archive_list_parser = plugin_archive_subparsers.add_parser("list", help="list archived plugin package records")
+    plugin_archive_list_parser.add_argument("--json", action="store_true", help="emit archive records as JSON")
+    plugin_archive_inspect_parser = plugin_archive_subparsers.add_parser("inspect", help="inspect one archived plugin package record")
+    plugin_archive_inspect_parser.add_argument("plugin_id")
+    plugin_archive_inspect_parser.add_argument("--json", action="store_true", help="emit archive record as JSON")
 
     plugins_parser = subparsers.add_parser("plugins", help="multi-plugin governance commands")
     plugins_subparsers = plugins_parser.add_subparsers(dest="plugins_command", required=True)
@@ -266,6 +282,7 @@ def cmd_plugin_diagnose(root: Path, plugin_id: str, *, as_json: bool = False, la
     output_lang = normalize_lang(lang)
     manifest = Catalog(root=root).load_one(plugin_id)
     diagnosis = diagnose_plugin(root, OpenTenBaseRuntime(), manifest)
+    ArchiveStore(root).upsert(build_archive_record(root, manifest, diagnosis))
     exit_code = 0 if diagnosis.next_action in {"deploy", "verify", "review"} else 1
     if as_json:
         print(json.dumps(diagnosis_json(diagnosis), indent=2, ensure_ascii=False))
@@ -282,6 +299,54 @@ def cmd_plugin_diagnose(root: Path, plugin_id: str, *, as_json: bool = False, la
         ]
         print(render_table([text("check", output_lang), text("detail", output_lang)], rows))
     return exit_code
+
+
+def cmd_plugin_roles(root: Path, plugin_id: str, *, as_json: bool = False) -> int:
+    manifest = Catalog(root=root).load_one(plugin_id)
+    if as_json:
+        print(json.dumps(role_summary(manifest), indent=2, ensure_ascii=False))
+        return 0
+    rows = [[step.role, step.step, step.detail] for step in role_steps(manifest)]
+    print(render_table(["role", "step", "detail"], rows))
+    return 0
+
+
+def cmd_plugin_consistency(root: Path, plugin_id: str, *, as_json: bool = False) -> int:
+    manifest = Catalog(root=root).load_one(plugin_id)
+    items = consistency_check(root, OpenTenBaseRuntime(), manifest)
+    if as_json:
+        print(json.dumps(consistency_items_json(items), indent=2, ensure_ascii=False))
+    else:
+        rows = [[item.plugin_id, item.check, item.status, item.detail] for item in items]
+        print(render_table(["plugin_id", "check", "status", "detail"], rows))
+    return 1 if any(item.status == "fail" for item in items) else 0
+
+
+def cmd_plugin_archive_list(root: Path, *, as_json: bool = False) -> int:
+    records = ArchiveStore(root).all()
+    if as_json:
+        print(json.dumps(archive_list_json(records), indent=2, ensure_ascii=False))
+        return 0
+    if not records:
+        print("No archive records found.")
+        return 0
+    rows = [[record.plugin_id, record.version, record.status, ", ".join(record.target_roles), record.installed_at, record.updated_at] for record in records]
+    print(render_table(["plugin_id", "version", "status", "target_roles", "installed_at", "updated_at"], rows))
+    return 0
+
+
+def cmd_plugin_archive_inspect(root: Path, plugin_id: str, *, as_json: bool = False) -> int:
+    record = ArchiveStore(root).get(plugin_id)
+    if record is None:
+        print("{}" if as_json else f"No archive record found for {plugin_id}.")
+        return 0
+    payload = archive_record_json(record)
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    rows = [[key, json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value)] for key, value in payload.items()]
+    print(render_table(["field", "value"], rows))
+    return 0
 
 
 def _runtime_metadata(runtime: OpenTenBaseRuntime) -> dict[str, Any]:
@@ -324,12 +389,18 @@ def record_action_result(root: Path, manifest_version: str, runtime: OpenTenBase
     )
 
 
+def refresh_archive(root: Path, manifest, runtime: OpenTenBaseRuntime) -> None:
+    diagnosis = diagnose_plugin(root, runtime, manifest)
+    ArchiveStore(root).upsert(build_archive_record(root, manifest, diagnosis))
+
+
 def cmd_verify(root: Path, plugin_id: str, *, removed: bool = False) -> int:
     catalog = Catalog(root=root)
     manifest = catalog.load_one(plugin_id)
     runtime = OpenTenBaseRuntime()
     smoke_result = run_removed_verify(runtime, manifest) if removed else run_smoke_verify(runtime, manifest, manifest.smoke_sql)
     record_action_result(root, manifest.version, runtime, smoke_result)
+    refresh_archive(root, manifest, runtime)
     if smoke_result.stdout:
         print(smoke_result.stdout)
     if smoke_result.stderr:
@@ -353,6 +424,7 @@ def cmd_deploy(root: Path, plugin_id: str) -> int:
         }
     )
     record_action_result(root, manifest.version, runtime, result)
+    refresh_archive(root, manifest, runtime)
     if result.stdout:
         print(result.stdout)
     if result.stderr:
@@ -445,6 +517,7 @@ def cmd_rollback(root: Path, plugin_id: str, *, execute: bool = False) -> int:
     result = rollback_plugin(runtime, manifest, execute=execute)
     result.metadata.setdefault("rollback_sql", str(manifest.rollback_sql) if manifest.rollback_sql else None)
     record_action_result(root, manifest.version, runtime, result)
+    refresh_archive(root, manifest, runtime)
     if result.stdout:
         print(result.stdout)
     if result.stderr:
@@ -488,6 +561,15 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_plugin_precheck(args.root, args.plugin_id, as_json=args.json, lang=args.lang)
             if args.plugin_command == "diagnose":
                 return cmd_plugin_diagnose(args.root, args.plugin_id, as_json=args.json, lang=args.lang)
+            if args.plugin_command == "roles":
+                return cmd_plugin_roles(args.root, args.plugin_id, as_json=args.json)
+            if args.plugin_command == "consistency":
+                return cmd_plugin_consistency(args.root, args.plugin_id, as_json=args.json)
+            if args.plugin_command == "archive":
+                if args.archive_command == "list":
+                    return cmd_plugin_archive_list(args.root, as_json=args.json)
+                if args.archive_command == "inspect":
+                    return cmd_plugin_archive_inspect(args.root, args.plugin_id, as_json=args.json)
         if args.command == "plugins":
             if args.plugins_command == "status":
                 return cmd_plugins_status(args.root, as_json=args.json, lang=args.lang)

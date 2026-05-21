@@ -38,9 +38,9 @@ def make_manifest(root: Path, *, plugin_id: str, installed_probe: str | None, di
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text("", encoding="utf-8")
 
-    install_sql = root / "payload" / plugin_id / "install.sql"
-    verify_sql = root / "payload" / plugin_id / "verify.sql"
-    rollback_sql = root / "payload" / plugin_id / "rollback.sql"
+    install_sql = root / "platform" / "payload" / plugin_id / "install.sql"
+    verify_sql = root / "platform" / "payload" / plugin_id / "verify.sql"
+    rollback_sql = root / "platform" / "payload" / plugin_id / "rollback.sql"
     rollback_sql.parent.mkdir(parents=True, exist_ok=True)
     install_sql.write_text("SELECT 1;", encoding="utf-8")
     verify_sql.write_text("SELECT 1;", encoding="utf-8")

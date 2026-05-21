@@ -16,7 +16,7 @@ payload:
   source_root: src/otb_timeseries
   install_sql: src/otb_timeseries/core/sql/otb_timeseries--1.0.sql
   verify_sql: tests/functional/complete_feature_test.sql
-  smoke_sql: platform/recipes/otb_timeseries_smoke.sql
+  smoke_sql: recipes/otb_timeseries_smoke.sql
   installed_probe: SELECT otb_ts.version();
 notes:
   - Keep the platform layer separate from the plugin payload.
