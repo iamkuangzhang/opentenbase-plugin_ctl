@@ -21,6 +21,7 @@ class PluginManifest:
     targets: dict[str, bool]
     payload: dict[str, Any]
     distributed: dict[str, Any] = field(default_factory=dict)
+    hooks: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     path: Path | None = None
 
@@ -96,6 +97,7 @@ def load_manifest(path: Path) -> PluginManifest:
         targets=dict(raw["targets"]),
         payload=dict(raw["payload"]),
         distributed=dict(raw.get("distributed", {})),
+        hooks=dict(raw.get("hooks", {})),
         notes=list(raw.get("notes", [])),
         path=path,
     )

@@ -11,6 +11,19 @@ distributed:
     - coordinator
   probe_strategy: coordinator
   notes: Runs through coordinator only.
+hooks:
+  preinstall:
+    coordinator:
+      - examples/plugins/dnx_smoke_plugin/payload/hooks/preinstall.sql
+  postinstall:
+    coordinator:
+      - examples/plugins/dnx_smoke_plugin/payload/hooks/postinstall.sql
+  preuninstall:
+    coordinator:
+      - examples/plugins/dnx_smoke_plugin/payload/hooks/preuninstall.sql
+  postuninstall:
+    coordinator:
+      - examples/plugins/dnx_smoke_plugin/payload/hooks/postuninstall.sql
 payload:
   source_root: examples/plugins/dnx_smoke_plugin/payload
   install_sql: examples/plugins/dnx_smoke_plugin/payload/sql/install.sql

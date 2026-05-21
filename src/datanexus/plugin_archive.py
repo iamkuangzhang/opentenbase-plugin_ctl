@@ -9,7 +9,7 @@ from typing import Any
 
 from .manifest import PluginManifest
 from .plugin_diagnose import PluginDiagnosis
-from .plugin_roles import manifest_roles
+from .plugin_roles import manifest_roles, role_hooks_json, role_steps_json, role_hooks, role_steps
 from .state_store import StateRecord, StateStore
 
 
@@ -25,6 +25,10 @@ class ArchiveRecord:
     latest_actions: dict[str, dict[str, Any]]
     runtime_metadata: dict[str, Any]
     updated_at: str
+    manifest: dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
+    roles: dict[str, Any] = field(default_factory=dict)
+    package_state: dict[str, Any] = field(default_factory=dict)
 
 
 class ArchiveStore:
@@ -62,6 +66,10 @@ def manifest_checksum(manifest: PluginManifest) -> str:
     paths = [manifest.path, manifest.install_sql, manifest.verify_sql, manifest.smoke_sql]
     if manifest.rollback_sql:
         paths.append(manifest.rollback_sql)
+    for hook in role_hooks(manifest):
+        if hook.exists is not None:
+            path = Path(hook.detail)
+            paths.append(path if path.is_absolute() else manifest.project_root / path)
     for path in sorted([item for item in paths if item is not None], key=lambda item: str(item)):
         digest.update(str(path.relative_to(manifest.project_root)).encode("utf-8"))
         digest.update(b"\0")
@@ -82,6 +90,7 @@ def _record_json(record: StateRecord) -> dict[str, Any]:
         "stage": record.metadata.get("stage", ""),
         "returncode": record.metadata.get("returncode", ""),
         "duration_ms": record.metadata.get("duration_ms", ""),
+        "metadata": record.metadata,
     }
 
 
@@ -108,6 +117,49 @@ def runtime_metadata_from_actions(actions: dict[str, dict[str, Any]], records: l
     return {}
 
 
+def _path_state(root: Path, path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {"path": "", "relative_path": "", "exists": False}
+    try:
+        relative = str(path.relative_to(root))
+    except ValueError:
+        relative = str(path)
+    return {"path": str(path), "relative_path": relative, "exists": path.exists()}
+
+
+def manifest_package_state(root: Path, manifest: PluginManifest) -> dict[str, Any]:
+    paths = {
+        "manifest": _path_state(root, manifest.path),
+        "source_root": _path_state(root, manifest.source_root),
+        "install_sql": _path_state(root, manifest.install_sql),
+        "verify_sql": _path_state(root, manifest.verify_sql),
+        "smoke_sql": _path_state(root, manifest.smoke_sql),
+        "rollback_sql": _path_state(root, manifest.rollback_sql),
+    }
+    missing = [name for name, state in paths.items() if name != "rollback_sql" and not state["exists"]]
+    payload_complete = not missing and all(hook.exists is not False for hook in role_hooks(manifest))
+    manifest_kind = "bundled_package" if payload_complete else "reference_manifest"
+    return {
+        "manifest_kind": manifest_kind,
+        "payload_complete": payload_complete,
+        "missing": missing,
+        "paths": paths,
+        "hooks": role_hooks_json(role_hooks(manifest)),
+    }
+
+
+def manifest_payload_summary(manifest: PluginManifest) -> dict[str, Any]:
+    return {
+        "source_root": manifest.payload.get("source_root", ""),
+        "install_sql": manifest.payload.get("install_sql", ""),
+        "verify_sql": manifest.payload.get("verify_sql", ""),
+        "smoke_sql": manifest.payload.get("smoke_sql", ""),
+        "rollback_sql": manifest.payload.get("rollback_sql", ""),
+        "installed_probe": manifest.payload.get("installed_probe", ""),
+        "removed_probe": manifest.payload.get("removed_probe", ""),
+    }
+
+
 def build_archive_record(root: Path, manifest: PluginManifest, diagnosis: PluginDiagnosis | None = None) -> ArchiveRecord:
     now = datetime.now(timezone.utc).isoformat()
     actions = latest_actions(root, manifest.plugin_id)
@@ -132,6 +184,20 @@ def build_archive_record(root: Path, manifest: PluginManifest, diagnosis: Plugin
         latest_actions=actions,
         runtime_metadata=runtime_metadata_from_actions(actions, records),
         updated_at=now,
+        manifest={
+            "path": str(manifest.path or ""),
+            "kind": manifest_package_state(root, manifest)["manifest_kind"],
+            "database": manifest.database,
+            "targets": manifest.targets,
+            "distributed": manifest.distributed,
+        },
+        payload=manifest_payload_summary(manifest),
+        roles={
+            "target_roles": manifest_roles(manifest),
+            "steps": role_steps_json(role_steps(manifest)),
+            "hooks": role_hooks_json(role_hooks(manifest)),
+        },
+        package_state=manifest_package_state(root, manifest),
     )
 
 

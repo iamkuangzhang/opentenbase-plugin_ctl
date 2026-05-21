@@ -8,6 +8,7 @@ import yaml
 
 from .manifest import ManifestError, PluginManifest, load_manifest
 from .plugin_governance import GovernanceRuntime, cluster_roles, installed_state, registered_node_probe
+from .plugin_roles import HOOK_NAMES, role_hooks
 
 
 @dataclass(slots=True)
@@ -45,6 +46,7 @@ class PrecheckItem:
 REQUIRED_FIELDS = ["plugin_id", "name", "version", "description", "database", "targets", "payload"]
 REQUIRED_PAYLOAD_FIELDS = ["source_root", "install_sql", "verify_sql", "installed_probe"]
 VALID_DISTRIBUTED_ROLES = {"coordinator", "datanode"}
+VALID_HOOK_ROLES = {"coordinator", "datanode", "all"}
 
 
 def _plugin_id(raw: dict[str, Any], fallback: str = "unknown") -> str:
@@ -156,6 +158,18 @@ def lint_manifest(manifest: PluginManifest) -> list[LintItem]:
                 str(manifest.distributed.get("probe_strategy") or "missing probe_strategy"),
             )
         )
+
+    for hook_name in manifest.hooks:
+        if hook_name not in HOOK_NAMES:
+            items.append(LintItem(plugin_id, f"hook:{hook_name}", "warn", "unknown lifecycle hook"))
+    for hook in role_hooks(manifest):
+        if hook.role not in VALID_HOOK_ROLES:
+            items.append(LintItem(plugin_id, f"hook:{hook.hook}:{hook.role}", "fail", "invalid hook role"))
+        elif hook.exists is False:
+            items.append(LintItem(plugin_id, f"hook:{hook.hook}:{hook.role}", "fail", hook.detail))
+        else:
+            detail = hook.detail if hook.exists is None else f"{hook.detail} exists"
+            items.append(LintItem(plugin_id, f"hook:{hook.hook}:{hook.role}", "pass", detail))
 
     return items
 

@@ -143,6 +143,7 @@ def cmd_inspect(root: Path, plugin_id: str) -> int:
         "database": manifest.database,
         "targets": manifest.targets,
         "distributed": manifest.distributed,
+        "hooks": manifest.hooks,
         "payload": manifest.payload,
         "notes": manifest.notes,
     }

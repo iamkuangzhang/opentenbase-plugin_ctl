@@ -67,6 +67,8 @@ python -m datanexus plugins status --json
 - `consistency`：围绕插件检查 archive、manifest、文件、probe、角色和运行态是否一致。
 - `archive`：查询本地插件包治理快照，不替代 action 级别的 `state/report`。
 
+M3 已开始支持声明式 role hooks：`preinstall / postinstall / preuninstall / postuninstall`。当前 hook 只进入规划、lint、archive 和 consistency，不会自动执行。
+
 ## 插件结构
 
 ```text
@@ -151,7 +153,7 @@ JSON 输出保持英文 key，便于自动化集成。
 - M0：CLI 骨架和基础闭环已冻结。
 - M1：`dnx_smoke_plugin` 完成可重复生命周期验证。
 - M2：插件治理链路已形成：`lint -> plan -> precheck -> diagnose -> deploy -> verify -> report`。
-- M3：开始补齐分布式插件包治理：`archive/state -> roles -> consistency`。
+- M3：开始补齐分布式插件包治理：`archive/state -> roles/hooks -> consistency`。
 
 详细文档：
 
@@ -238,6 +240,8 @@ Meaning:
 - `consistency`: checks plugin-centered consistency across archive, manifest, package files, probes, roles, and runtime state.
 - `archive`: queries local plugin package governance snapshots. It does not replace action-level `state/report`.
 
+M3 also supports declarative role hooks: `preinstall / postinstall / preuninstall / postuninstall`. Hooks are planned, linted, archived, and checked for consistency, but they are not executed automatically.
+
 ## Plugin Layout
 
 ```text
@@ -322,7 +326,7 @@ JSON output keeps stable English keys for automation.
 - M0: CLI skeleton and base loop are frozen.
 - M1: `dnx_smoke_plugin` has completed repeatable lifecycle validation.
 - M2: plugin governance flow is in place: `lint -> plan -> precheck -> diagnose -> deploy -> verify -> report`.
-- M3: distributed plugin package governance has started: `archive/state -> roles -> consistency`.
+- M3: distributed plugin package governance has started: `archive/state -> roles/hooks -> consistency`.
 
 Documents:
 

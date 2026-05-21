@@ -7,7 +7,7 @@ from datanexus.manifest import load_manifest
 from datanexus.plugin_archive import ArchiveStore, archive_record_json, build_archive_record, manifest_checksum
 from datanexus.plugin_consistency import consistency_check, consistency_items_json
 from datanexus.plugin_diagnose import diagnose_plugin
-from datanexus.plugin_roles import manifest_roles, role_steps, role_steps_json
+from datanexus.plugin_roles import manifest_roles, role_hooks, role_hooks_json, role_steps, role_steps_json
 from datanexus.state_store import StateStore
 
 
@@ -36,13 +36,16 @@ class Runtime:
         return subprocess.CompletedProcess(args=["docker", "exec", *args], returncode=0, stdout="", stderr="")
 
 
-def write_manifest(root: Path, *, distributed: bool = True) -> Path:
+def write_manifest(root: Path, *, distributed: bool = True, hooks: bool = False) -> Path:
     manifest_dir = root / "examples" / "plugins" / "archive_plugin"
     payload_dir = root / "payload" / "archive_plugin" / "sql"
+    hook_dir = root / "payload" / "archive_plugin" / "hooks"
     manifest_dir.mkdir(parents=True, exist_ok=True)
     payload_dir.mkdir(parents=True, exist_ok=True)
+    hook_dir.mkdir(parents=True, exist_ok=True)
     for name in ["install.sql", "verify.sql", "rollback.sql"]:
         (payload_dir / name).write_text("SELECT 1;", encoding="utf-8")
+    (hook_dir / "preinstall.sql").write_text("SELECT 'preinstall';", encoding="utf-8")
     lines = [
         "plugin_id: archive_plugin",
         "name: Archive Plugin",
@@ -61,6 +64,15 @@ def write_manifest(root: Path, *, distributed: bool = True) -> Path:
                 "    - coordinator",
                 "    - datanode",
                 "  probe_strategy: coordinator",
+            ]
+        )
+    if hooks:
+        lines.extend(
+            [
+                "hooks:",
+                "  preinstall:",
+                "    coordinator:",
+                "      - payload/archive_plugin/hooks/preinstall.sql",
             ]
         )
     lines.extend(
@@ -85,7 +97,13 @@ class PluginArchiveTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             manifest = load_manifest(write_manifest(root))
-            StateStore(root).append("archive_plugin", "deploy", True, "deployed", {"version": "0.1.0", "cluster": "test", "container": "cn"})
+            StateStore(root).append(
+                "archive_plugin",
+                "deploy",
+                True,
+                "deployed",
+                {"version": "0.1.0", "cluster": "test", "container": "cn", "remote_root": "/tmp/datanexus/archive_plugin_test"},
+            )
             diagnosis = diagnose_plugin(root, Runtime(installed=True), manifest)
 
             record = ArchiveStore(root).upsert(build_archive_record(root, manifest, diagnosis))
@@ -97,6 +115,9 @@ class PluginArchiveTest(unittest.TestCase):
             self.assertEqual(loaded.target_roles, ["coordinator", "datanode"])  # type: ignore[union-attr]
             self.assertIn("deploy", loaded.latest_actions)  # type: ignore[union-attr]
             self.assertEqual(archive_record_json(record)["runtime_metadata"]["container"], "cn")
+            self.assertEqual(archive_record_json(record)["manifest"]["kind"], "bundled_package")
+            self.assertTrue(archive_record_json(record)["package_state"]["payload_complete"])
+            self.assertIn("source_root", archive_record_json(record)["payload"])
 
     def test_manifest_checksum_changes_when_payload_changes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -116,6 +137,16 @@ class PluginArchiveTest(unittest.TestCase):
             self.assertEqual(manifest_roles(manifest), ["coordinator", "datanode"])
             self.assertEqual(manifest_roles(legacy), ["coordinator", "datanode"])
             self.assertIn({"role": "coordinator", "step": "install_sql", "detail": str(manifest.install_sql)}, role_steps_json(role_steps(manifest)))
+
+    def test_role_hooks_are_mapped_by_lifecycle_and_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest = load_manifest(write_manifest(root, hooks=True))
+
+            hooks = role_hooks(manifest)
+
+            self.assertEqual(role_hooks_json(hooks), [{"hook": "preinstall", "role": "coordinator", "detail": "payload/archive_plugin/hooks/preinstall.sql", "exists": True}])
+            self.assertIn({"role": "coordinator", "step": "hook:preinstall", "detail": "payload/archive_plugin/hooks/preinstall.sql"}, role_steps_json(role_steps(manifest)))
 
     def test_consistency_warns_without_archive_and_passes_with_archive(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -143,6 +174,24 @@ class PluginArchiveTest(unittest.TestCase):
             checks = consistency_check(root, Runtime(installed=False), manifest)
 
             self.assertEqual(next(item for item in checks if item.check == "archive_vs_runtime").status, "warn")
+
+    def test_consistency_checks_archived_remote_payload_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            manifest = load_manifest(write_manifest(root))
+            StateStore(root).append(
+                "archive_plugin",
+                "deploy",
+                True,
+                "deployed",
+                {"version": "0.1.0", "remote_root": "/tmp/datanexus/archive_plugin_test"},
+            )
+            ArchiveStore(root).upsert(build_archive_record(root, manifest, diagnose_plugin(root, Runtime(installed=True), manifest)))
+
+            checks = consistency_check(root, Runtime(installed=True), manifest)
+
+            self.assertEqual(next(item for item in checks if item.check == "role_remote_payload:coordinator").status, "pass")
+            self.assertEqual(next(item for item in checks if item.check == "role_remote_payload:datanode").status, "pass")
 
     def test_consistency_surfaces_package_file_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
