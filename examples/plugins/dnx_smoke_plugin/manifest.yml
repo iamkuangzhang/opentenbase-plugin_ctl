@@ -1,0 +1,25 @@
+plugin_id: dnx_smoke_plugin
+name: DataNexus Smoke Plugin
+version: 0.1.0
+description: Minimal sample plugin for a safe M1 lifecycle closed loop.
+database: OpenTenBase
+targets:
+  cn: true
+  dn: true
+distributed:
+  required_roles:
+    - coordinator
+  probe_strategy: coordinator
+  notes: Runs through coordinator only.
+payload:
+  source_root: examples/plugins/dnx_smoke_plugin/payload
+  install_sql: examples/plugins/dnx_smoke_plugin/payload/sql/install.sql
+  verify_sql: examples/plugins/dnx_smoke_plugin/payload/sql/verify.sql
+  smoke_sql: examples/plugins/dnx_smoke_plugin/payload/sql/verify.sql
+  rollback_sql: examples/plugins/dnx_smoke_plugin/payload/sql/rollback.sql
+  installed_probe: SELECT dnx_smoke_plugin.version();
+  verify_expect_stdout: ok
+  removed_probe: SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'dnx_smoke_plugin') THEN 'removed' ELSE 'present' END;
+notes:
+  - This is a controlled sample plugin for platform verification.
+  - It is safe to deploy and roll back repeatedly in the current Docker cluster.

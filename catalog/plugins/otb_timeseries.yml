@@ -1,0 +1,23 @@
+plugin_id: otb_timeseries
+name: OpenTenBase TimeSeries
+version: 1.0.0
+description: Sample time-series plugin for the first DataNexus closed loop.
+database: OpenTenBase
+targets:
+  cn: true
+  dn: true
+distributed:
+  required_roles:
+    - coordinator
+    - datanode
+  probe_strategy: coordinator
+  notes: Expected to affect distributed time-series tables; chunk distribution warning is tracked separately.
+payload:
+  source_root: src/otb_timeseries
+  install_sql: src/otb_timeseries/core/sql/otb_timeseries--1.0.sql
+  verify_sql: tests/functional/complete_feature_test.sql
+  smoke_sql: platform/recipes/otb_timeseries_smoke.sql
+  installed_probe: SELECT otb_ts.version();
+notes:
+  - Keep the platform layer separate from the plugin payload.
+  - Manifest files are parsed as real YAML.

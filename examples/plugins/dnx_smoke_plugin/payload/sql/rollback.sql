@@ -1,0 +1,1 @@
+DROP SCHEMA IF EXISTS dnx_smoke_plugin CASCADE;
