@@ -1,0 +1,24 @@
+plugin_id: otb_fulltext
+name: OpenTenBase Fulltext
+version: 1.0.0
+description: Chinese full-text search extension compatible with zhparser and RUM index concepts.
+database: OpenTenBase
+targets:
+  cn: true
+  dn: true
+distributed:
+  required_roles:
+    - coordinator
+    - datanode
+  probe_strategy: coordinator
+  notes: Full-text search payload includes native extension code.
+payload:
+  source_root: examples/plugins/legacy_payloads/otb_fulltext
+  install_sql: examples/plugins/legacy_payloads/otb_fulltext/sql/otb_fulltext--1.0.sql
+  verify_sql: examples/plugins/legacy_payloads/otb_fulltext/sql/test_otb_fulltext.sql
+  smoke_sql: recipes/otb_fulltext_smoke.sql
+  installed_probe: SELECT otb_fulltext.version();
+  requires_build: true
+notes:
+  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Do not deploy until native shared-library build/install is prepared.

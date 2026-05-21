@@ -1,0 +1,24 @@
+plugin_id: otb_analytics
+name: OpenTenBase Analytics
+version: 1.0.0
+description: Time-series analysis algorithms for OpenTenBase.
+database: OpenTenBase
+targets:
+  cn: true
+  dn: true
+distributed:
+  required_roles:
+    - coordinator
+    - datanode
+  probe_strategy: coordinator
+  notes: Analytics aggregate functions require native shared-library support.
+payload:
+  source_root: examples/plugins/legacy_payloads/otb_analytics
+  install_sql: examples/plugins/legacy_payloads/otb_analytics/sql/otb_analytics--1.0.sql
+  verify_sql: recipes/otb_analytics_smoke.sql
+  smoke_sql: recipes/otb_analytics_smoke.sql
+  installed_probe: SELECT otb_analytics.version();
+  requires_build: true
+notes:
+  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Do not deploy until native shared-library build/install is prepared.

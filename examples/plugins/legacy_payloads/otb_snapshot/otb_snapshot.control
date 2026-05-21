@@ -1,0 +1,5 @@
+# otb_snapshot extension
+comment = 'OpenTenBase Snapshot - Time-Series Data Snapshot and Rollback System'
+default_version = '1.0'
+relocatable = false
+

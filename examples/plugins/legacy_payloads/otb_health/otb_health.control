@@ -1,0 +1,5 @@
+# otb_health extension
+comment = 'OpenTenBase Health - Data Quality Check and Smart Diagnostics System'
+default_version = '1.0'
+relocatable = false
+

@@ -1,0 +1,24 @@
+plugin_id: otb_age
+name: OpenTenBase AGE
+version: 1.0.0
+description: Apache AGE compatible graph database extension for OpenTenBase.
+database: OpenTenBase
+targets:
+  cn: true
+  dn: true
+distributed:
+  required_roles:
+    - coordinator
+    - datanode
+  probe_strategy: coordinator
+  notes: Graph extension payload requires native build before SQL deployment.
+payload:
+  source_root: examples/plugins/legacy_payloads/otb_age
+  install_sql: examples/plugins/legacy_payloads/otb_age/sql/otb_age--1.0.sql
+  verify_sql: examples/plugins/legacy_payloads/otb_age/sql/test_otb_age.sql
+  smoke_sql: recipes/otb_age_smoke.sql
+  installed_probe: SELECT otb_age.version();
+  requires_build: true
+notes:
+  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Do not deploy until native shared-library build/install is prepared.

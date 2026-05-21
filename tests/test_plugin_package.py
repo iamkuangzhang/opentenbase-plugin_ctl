@@ -181,6 +181,15 @@ class PluginPackageLintTest(unittest.TestCase):
             self.assertEqual(next(item for item in items if item.check == "distributed").status, "warn")
             self.assertEqual(next(item for item in items if item.check == "rollback_sql").status, "warn")
 
+    def test_lint_requires_build_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = write_plugin(Path(tmpdir) / "platform")
+            manifest_path.write_text(manifest_path.read_text(encoding="utf-8") + "  requires_build: true\n", encoding="utf-8")
+
+            items = lint_manifest_path(manifest_path)
+
+            self.assertEqual(next(item for item in items if item.check == "payload:requires_build").status, "warn")
+
 
 class PluginPackagePlanTest(unittest.TestCase):
     def test_plan_installed_plugin_skips_deploy(self) -> None:
@@ -226,6 +235,16 @@ class PluginPackagePlanTest(unittest.TestCase):
 
             self.assertIn("unsupported", plan.rollback_plan)
             self.assertIn("rollback unsupported", plan.risks)
+
+    def test_plan_requires_build_reports_risk(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = write_plugin(Path(tmpdir) / "platform")
+            manifest_path.write_text(manifest_path.read_text(encoding="utf-8") + "  requires_build: true\n", encoding="utf-8")
+            manifest = load_manifest(manifest_path)
+
+            plan = plugin_plan(ProbeRuntime(returncode=1, stderr="missing"), manifest)
+
+            self.assertIn("native build required before deploy", plan.risks)
 
     def test_plan_real_manifests_have_expected_governance_shape(self) -> None:
         platform_root = Path(__file__).resolve().parents[1]

@@ -1,0 +1,7 @@
+# otb_age extension
+comment = 'Apache AGE compatible graph database for OpenTenBase'
+default_version = '1.0'
+module_pathname = '$libdir/otb_age'
+relocatable = false
+schema = otb_age
+

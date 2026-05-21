@@ -23,6 +23,24 @@ class CatalogTest(unittest.TestCase):
         self.assertTrue(manifest.verify_sql.exists())
         self.assertIsNotNone(manifest.rollback_sql)
 
+    def test_load_legacy_plugin_manifests(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        catalog = Catalog(root=root)
+        plugin_ids = {manifest.plugin_id for manifest in catalog.load_all()}
+
+        self.assertTrue(
+            {
+                "otb_age",
+                "otb_analytics",
+                "otb_fulltext",
+                "otb_health",
+                "otb_routing",
+                "otb_scheduler",
+                "otb_snapshot",
+                "otb_timeseries",
+            }.issubset(plugin_ids)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

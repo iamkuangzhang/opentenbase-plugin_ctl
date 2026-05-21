@@ -1,0 +1,6 @@
+# otb_analytics extension
+comment = 'OpenTenBase Analytics - Time Series Analysis Algorithms (Moving Average, Anomaly Detection, Advanced Aggregates)'
+default_version = '1.0'
+module_pathname = '$libdir/otb_analytics'
+relocatable = false
+

@@ -1,0 +1,6 @@
+# otb_timeseries_c extension
+comment = 'OpenTenBase TimeSeries C Extension - High Performance Core Functions'
+default_version = '1.0'
+module_pathname = '$libdir/otb_timeseries_c'
+relocatable = true
+

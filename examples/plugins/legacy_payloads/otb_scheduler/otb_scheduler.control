@@ -1,0 +1,6 @@
+# otb_scheduler extension
+comment = 'Task scheduling and partition management (pg_cron + pg_partman compatible)'
+default_version = '1.0'
+relocatable = false
+schema = otb_scheduler
+

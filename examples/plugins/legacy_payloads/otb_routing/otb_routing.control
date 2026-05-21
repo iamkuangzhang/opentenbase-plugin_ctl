@@ -1,0 +1,6 @@
+# otb_routing extension
+comment = 'Road network routing analysis (pgRouting compatible)'
+default_version = '1.0'
+relocatable = false
+schema = otb_routing
+

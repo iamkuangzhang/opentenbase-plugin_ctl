@@ -1,0 +1,5 @@
+# otb_timeseries extension
+comment = 'TimescaleDB-compatible time-series data management for OpenTenBase'
+default_version = '1.0'
+relocatable = false
+requires = ''

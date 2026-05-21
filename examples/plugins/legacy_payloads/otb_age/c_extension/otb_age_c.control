@@ -1,0 +1,6 @@
+# otb_age_c extension
+comment = 'High-performance graph algorithms for otb_age (C implementation)'
+default_version = '1.0'
+module_pathname = '$libdir/otb_age_c'
+relocatable = false
+

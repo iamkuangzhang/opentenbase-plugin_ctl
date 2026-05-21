@@ -171,6 +171,11 @@ def lint_manifest(manifest: PluginManifest) -> list[LintItem]:
             detail = hook.detail if hook.exists is None else f"{hook.detail} exists"
             items.append(LintItem(plugin_id, f"hook:{hook.hook}:{hook.role}", "pass", detail))
 
+    if manifest.payload.get("requires_build"):
+        items.append(LintItem(plugin_id, "payload:requires_build", "warn", "plugin uses C/shared-library code; build/install of native artifacts is required before SQL deploy"))
+    if manifest.payload.get("destructive_install"):
+        items.append(LintItem(plugin_id, "payload:destructive_install", "warn", "install SQL may drop or replace existing objects; review before deploy"))
+
     return items
 
 
@@ -215,6 +220,10 @@ def plugin_plan(runtime: GovernanceRuntime, manifest: PluginManifest) -> PluginP
 
     if not manifest.distributed:
         risks.append("missing distributed declaration")
+    if manifest.payload.get("requires_build"):
+        risks.append("native build required before deploy")
+    if manifest.payload.get("destructive_install"):
+        risks.append("install SQL may drop or replace existing objects")
     if manifest.plugin_id == "otb_timeseries":
         risks.append("chunk distribution warning is tracked separately")
 

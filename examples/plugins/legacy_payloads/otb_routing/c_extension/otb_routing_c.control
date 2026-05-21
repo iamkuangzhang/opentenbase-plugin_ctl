@@ -1,0 +1,6 @@
+# otb_routing_c extension
+comment = 'High-performance routing algorithms (pgRouting compatible, C implementation)'
+default_version = '1.0'
+module_pathname = '$libdir/otb_routing_c'
+relocatable = false
+

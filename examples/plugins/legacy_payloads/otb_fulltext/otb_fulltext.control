@@ -1,0 +1,7 @@
+# otb_fulltext extension
+comment = 'Chinese fulltext search compatible with zhparser and RUM index'
+default_version = '1.0'
+module_pathname = '$libdir/otb_fulltext'
+relocatable = false
+schema = otb_fulltext
+

@@ -4,7 +4,7 @@ include CHANGELOG.md
 include pyproject.toml
 recursive-include catalog *.yml
 recursive-include docs *.md
-recursive-include examples *.yml *.sql
+recursive-include examples *
 recursive-include recipes *.sql
 recursive-include tests *.py
 global-exclude __pycache__/*

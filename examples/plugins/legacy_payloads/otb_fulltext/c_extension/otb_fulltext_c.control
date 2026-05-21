@@ -1,0 +1,5 @@
+# otb_fulltext_c extension
+comment = 'OpenTenBase Fulltext - High-performance text processing (C extension)'
+default_version = '1.0'
+relocatable = true
+

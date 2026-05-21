@@ -1,0 +1,23 @@
+plugin_id: otb_scheduler
+name: OpenTenBase Scheduler
+version: 1.0.0
+description: Task scheduling and partition management compatibility layer for OpenTenBase.
+database: OpenTenBase
+targets:
+  cn: true
+  dn: false
+distributed:
+  required_roles:
+    - coordinator
+  probe_strategy: coordinator
+  notes: Scheduler metadata is replicated, but management entrypoint is coordinator.
+payload:
+  source_root: examples/plugins/legacy_payloads/otb_scheduler
+  install_sql: examples/plugins/legacy_payloads/otb_scheduler/sql/otb_scheduler--1.0.sql
+  verify_sql: examples/plugins/legacy_payloads/otb_scheduler/sql/test_otb_scheduler.sql
+  smoke_sql: recipes/otb_scheduler_smoke.sql
+  installed_probe: SELECT otb_scheduler.version();
+  destructive_install: true
+notes:
+  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Install SQL drops/recreates the schema; review before any real deploy.
