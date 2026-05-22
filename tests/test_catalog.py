@@ -23,6 +23,16 @@ class CatalogTest(unittest.TestCase):
         self.assertTrue(manifest.verify_sql.exists())
         self.assertIsNotNone(manifest.rollback_sql)
 
+    def test_load_otb_pgmq_manifest_from_examples(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        catalog = Catalog(root=root)
+        manifest = catalog.load_one("otb_pgmq")
+        self.assertEqual(manifest.plugin_id, "otb_pgmq")
+        self.assertEqual(manifest.version, "1.11.2-otb.0")
+        self.assertTrue(manifest.install_sql.exists())
+        self.assertTrue(manifest.verify_sql.exists())
+        self.assertEqual(manifest.distributed["probe_strategy"], "coordinator")
+
     def test_load_legacy_plugin_manifests(self) -> None:
         root = Path(__file__).resolve().parents[1]
         catalog = Catalog(root=root)
