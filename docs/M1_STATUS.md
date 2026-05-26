@@ -42,15 +42,15 @@ The M1 local verification sequence is:
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python -m datanexus cluster status
-python -m datanexus deploy dnx_smoke_plugin
-python -m datanexus verify dnx_smoke_plugin
-python -m datanexus rollback dnx_smoke_plugin --execute
-python -m datanexus verify dnx_smoke_plugin --removed
-python -m datanexus deploy otb_timeseries
-python -m datanexus verify otb_timeseries
-python -m datanexus report
-python -m datanexus report --json
+python -m plugin_ctl cluster status
+python -m plugin_ctl deploy dnx_smoke_plugin
+python -m plugin_ctl verify dnx_smoke_plugin
+python -m plugin_ctl rollback dnx_smoke_plugin --execute
+python -m plugin_ctl verify dnx_smoke_plugin --removed
+python -m plugin_ctl deploy otb_timeseries
+python -m plugin_ctl verify otb_timeseries
+python -m plugin_ctl report
+python -m plugin_ctl report --json
 ```
 
 ## Limitations

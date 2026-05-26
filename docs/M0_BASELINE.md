@@ -58,14 +58,14 @@ Run from this directory:
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python -m datanexus list
-python -m datanexus inspect otb_timeseries
-python -m datanexus doctor
-python -m datanexus deploy otb_timeseries
-python -m datanexus verify otb_timeseries
-python -m datanexus state otb_timeseries
-python -m datanexus report
-python -m datanexus rollback otb_timeseries
+python -m plugin_ctl list
+python -m plugin_ctl inspect otb_timeseries
+python -m plugin_ctl doctor
+python -m plugin_ctl deploy otb_timeseries
+python -m plugin_ctl verify otb_timeseries
+python -m plugin_ctl state otb_timeseries
+python -m plugin_ctl report
+python -m plugin_ctl rollback otb_timeseries
 ```
 
 Expected M0 behavior:

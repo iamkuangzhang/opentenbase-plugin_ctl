@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opentenbase-pluginctl"
+name = "opentenbase-plugin_ctl"
 version = "0.1.0"
 description = "CLI-first lifecycle governance tool for OpenTenBase distributed plugins"
 readme = "README.md"
@@ -15,8 +15,10 @@ dependencies = [
 ]
 
 [project.scripts]
+plugin_ctl = "datanexus.cli:main"
 datanexus = "datanexus.cli:main"
 opentenbase-pluginctl = "datanexus.cli:main"
+opentenbase-plugin_ctl = "datanexus.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

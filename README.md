@@ -23,38 +23,38 @@ OpenTenBase PluginCtl 是一个面向 OpenTenBase 分布式插件的 CLI 优先�
 基础命令：
 
 ```bash
-python -m datanexus list
-python -m datanexus inspect <plugin_id>
-python -m datanexus doctor
-python -m datanexus report
-python -m datanexus report --json
+python -m plugin_ctl list
+python -m plugin_ctl inspect <plugin_id>
+python -m plugin_ctl doctor
+python -m plugin_ctl report
+python -m plugin_ctl report --json
 ```
 
 生命周期命令：
 
 ```bash
-python -m datanexus deploy <plugin_id>
-python -m datanexus verify <plugin_id>
-python -m datanexus rollback <plugin_id>
-python -m datanexus rollback <plugin_id> --execute
-python -m datanexus state <plugin_id>
+python -m plugin_ctl deploy <plugin_id>
+python -m plugin_ctl verify <plugin_id>
+python -m plugin_ctl rollback <plugin_id>
+python -m plugin_ctl rollback <plugin_id> --execute
+python -m plugin_ctl state <plugin_id>
 ```
 
 插件治理命令：
 
 ```bash
-python -m datanexus plugin lint <plugin_id>
-python -m datanexus plugin plan <plugin_id>
-python -m datanexus plugin precheck <plugin_id>
-python -m datanexus plugin diagnose <plugin_id>
-python -m datanexus plugin check <plugin_id>
-python -m datanexus plugin status <plugin_id>
-python -m datanexus plugin roles <plugin_id>
-python -m datanexus plugin consistency <plugin_id>
-python -m datanexus plugin archive list
-python -m datanexus plugin archive inspect <plugin_id>
-python -m datanexus plugins status
-python -m datanexus plugins status --json
+python -m plugin_ctl plugin lint <plugin_id>
+python -m plugin_ctl plugin plan <plugin_id>
+python -m plugin_ctl plugin precheck <plugin_id>
+python -m plugin_ctl plugin diagnose <plugin_id>
+python -m plugin_ctl plugin check <plugin_id>
+python -m plugin_ctl plugin status <plugin_id>
+python -m plugin_ctl plugin roles <plugin_id>
+python -m plugin_ctl plugin consistency <plugin_id>
+python -m plugin_ctl plugin archive list
+python -m plugin_ctl plugin archive inspect <plugin_id>
+python -m plugin_ctl plugins status
+python -m plugin_ctl plugins status --json
 ```
 
 其中：
@@ -103,17 +103,22 @@ recipes/
 推荐安装：
 
 ```bash
-git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
-cd opentenbase-pluginctl
+git clone https://github.com/iamkuangzhang/opentenbase-plugin_ctl.git
+cd opentenbase-plugin_ctl
 python -m pip install -e .
 ```
 
 安装后可使用：
 
 ```bash
-opentenbase-pluginctl list
+plugin_ctl list
+python -m plugin_ctl list
+
+# Compatibility entrypoints
 datanexus list
 python -m datanexus list
+opentenbase-pluginctl list
+opentenbase-plugin_ctl list
 ```
 
 ## 推荐使用流程
@@ -121,22 +126,22 @@ python -m datanexus list
 5 分钟试用：
 
 ```bash
-python -m datanexus list
-python -m datanexus plugin lint dnx_smoke_plugin
-python -m datanexus plugin plan dnx_smoke_plugin
-python -m datanexus plugin precheck dnx_smoke_plugin
-python -m datanexus deploy dnx_smoke_plugin
-python -m datanexus verify dnx_smoke_plugin
-python -m datanexus plugin diagnose dnx_smoke_plugin
-python -m datanexus report
+python -m plugin_ctl list
+python -m plugin_ctl plugin lint dnx_smoke_plugin
+python -m plugin_ctl plugin plan dnx_smoke_plugin
+python -m plugin_ctl plugin precheck dnx_smoke_plugin
+python -m plugin_ctl deploy dnx_smoke_plugin
+python -m plugin_ctl verify dnx_smoke_plugin
+python -m plugin_ctl plugin diagnose dnx_smoke_plugin
+python -m plugin_ctl report
 ```
 
 如需回滚样例插件：
 
 ```bash
-python -m datanexus rollback dnx_smoke_plugin
-python -m datanexus rollback dnx_smoke_plugin --execute
-python -m datanexus verify dnx_smoke_plugin --removed
+python -m plugin_ctl rollback dnx_smoke_plugin
+python -m plugin_ctl rollback dnx_smoke_plugin --execute
+python -m plugin_ctl verify dnx_smoke_plugin --removed
 ```
 
 `rollback` 默认是 dry-run。只有显式传入 `--execute` 才会执行 manifest 声明的 `rollback_sql`。
@@ -153,7 +158,7 @@ python -m datanexus verify dnx_smoke_plugin --removed
 ```bash
 cd <repo-dir>
 set PYTHONPATH=src
-python -m datanexus plugins status
+python -m plugin_ctl plugins status
 ```
 
 PowerShell：
@@ -161,7 +166,7 @@ PowerShell：
 ```powershell
 cd <repo-dir>
 $env:PYTHONPATH = "src"
-python -m datanexus plugins status
+python -m plugin_ctl plugins status
 ```
 
 运行测试：
@@ -175,9 +180,9 @@ python -m unittest discover -s tests -v
 人类可读的插件治理命令默认中文输出。
 
 ```bash
-python -m datanexus plugin status otb_timeseries
-python -m datanexus plugin status otb_timeseries --lang en
-python -m datanexus plugin status otb_timeseries --lang both
+python -m plugin_ctl plugin status otb_timeseries
+python -m plugin_ctl plugin status otb_timeseries --lang en
+python -m plugin_ctl plugin status otb_timeseries --lang both
 ```
 
 JSON 输出保持英文 key，便于自动化集成。
@@ -234,38 +239,38 @@ It is built on the DataNexus plugin governance model.
 Basic commands:
 
 ```bash
-python -m datanexus list
-python -m datanexus inspect <plugin_id>
-python -m datanexus doctor
-python -m datanexus report
-python -m datanexus report --json
+python -m plugin_ctl list
+python -m plugin_ctl inspect <plugin_id>
+python -m plugin_ctl doctor
+python -m plugin_ctl report
+python -m plugin_ctl report --json
 ```
 
 Lifecycle commands:
 
 ```bash
-python -m datanexus deploy <plugin_id>
-python -m datanexus verify <plugin_id>
-python -m datanexus rollback <plugin_id>
-python -m datanexus rollback <plugin_id> --execute
-python -m datanexus state <plugin_id>
+python -m plugin_ctl deploy <plugin_id>
+python -m plugin_ctl verify <plugin_id>
+python -m plugin_ctl rollback <plugin_id>
+python -m plugin_ctl rollback <plugin_id> --execute
+python -m plugin_ctl state <plugin_id>
 ```
 
 Plugin governance commands:
 
 ```bash
-python -m datanexus plugin lint <plugin_id>
-python -m datanexus plugin plan <plugin_id>
-python -m datanexus plugin precheck <plugin_id>
-python -m datanexus plugin diagnose <plugin_id>
-python -m datanexus plugin check <plugin_id>
-python -m datanexus plugin status <plugin_id>
-python -m datanexus plugin roles <plugin_id>
-python -m datanexus plugin consistency <plugin_id>
-python -m datanexus plugin archive list
-python -m datanexus plugin archive inspect <plugin_id>
-python -m datanexus plugins status
-python -m datanexus plugins status --json
+python -m plugin_ctl plugin lint <plugin_id>
+python -m plugin_ctl plugin plan <plugin_id>
+python -m plugin_ctl plugin precheck <plugin_id>
+python -m plugin_ctl plugin diagnose <plugin_id>
+python -m plugin_ctl plugin check <plugin_id>
+python -m plugin_ctl plugin status <plugin_id>
+python -m plugin_ctl plugin roles <plugin_id>
+python -m plugin_ctl plugin consistency <plugin_id>
+python -m plugin_ctl plugin archive list
+python -m plugin_ctl plugin archive inspect <plugin_id>
+python -m plugin_ctl plugins status
+python -m plugin_ctl plugins status --json
 ```
 
 Meaning:
@@ -314,17 +319,22 @@ Requirements:
 Recommended install:
 
 ```bash
-git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
-cd opentenbase-pluginctl
+git clone https://github.com/iamkuangzhang/opentenbase-plugin_ctl.git
+cd opentenbase-plugin_ctl
 python -m pip install -e .
 ```
 
 Available entrypoints:
 
 ```bash
-opentenbase-pluginctl list
+plugin_ctl list
+python -m plugin_ctl list
+
+# Compatibility entrypoints
 datanexus list
 python -m datanexus list
+opentenbase-pluginctl list
+opentenbase-plugin_ctl list
 ```
 
 ## Recommended Flow
@@ -332,22 +342,22 @@ python -m datanexus list
 Five-minute trial:
 
 ```bash
-python -m datanexus list
-python -m datanexus plugin lint dnx_smoke_plugin
-python -m datanexus plugin plan dnx_smoke_plugin
-python -m datanexus plugin precheck dnx_smoke_plugin
-python -m datanexus deploy dnx_smoke_plugin
-python -m datanexus verify dnx_smoke_plugin
-python -m datanexus plugin diagnose dnx_smoke_plugin
-python -m datanexus report
+python -m plugin_ctl list
+python -m plugin_ctl plugin lint dnx_smoke_plugin
+python -m plugin_ctl plugin plan dnx_smoke_plugin
+python -m plugin_ctl plugin precheck dnx_smoke_plugin
+python -m plugin_ctl deploy dnx_smoke_plugin
+python -m plugin_ctl verify dnx_smoke_plugin
+python -m plugin_ctl plugin diagnose dnx_smoke_plugin
+python -m plugin_ctl report
 ```
 
 Rollback for the sample plugin:
 
 ```bash
-python -m datanexus rollback dnx_smoke_plugin
-python -m datanexus rollback dnx_smoke_plugin --execute
-python -m datanexus verify dnx_smoke_plugin --removed
+python -m plugin_ctl rollback dnx_smoke_plugin
+python -m plugin_ctl rollback dnx_smoke_plugin --execute
+python -m plugin_ctl verify dnx_smoke_plugin --removed
 ```
 
 `rollback` defaults to dry-run. It executes only when `--execute` is explicitly provided and the manifest declares `rollback_sql`.
@@ -364,7 +374,7 @@ python -m datanexus verify dnx_smoke_plugin --removed
 ```bash
 cd <repo-dir>
 set PYTHONPATH=src
-python -m datanexus plugins status
+python -m plugin_ctl plugins status
 ```
 
 PowerShell:
@@ -372,7 +382,7 @@ PowerShell:
 ```powershell
 cd <repo-dir>
 $env:PYTHONPATH = "src"
-python -m datanexus plugins status
+python -m plugin_ctl plugins status
 ```
 
 Run tests:
@@ -386,9 +396,9 @@ python -m unittest discover -s tests -v
 Human-readable plugin governance commands default to Chinese output.
 
 ```bash
-python -m datanexus plugin status otb_timeseries
-python -m datanexus plugin status otb_timeseries --lang en
-python -m datanexus plugin status otb_timeseries --lang both
+python -m plugin_ctl plugin status otb_timeseries
+python -m plugin_ctl plugin status otb_timeseries --lang en
+python -m plugin_ctl plugin status otb_timeseries --lang both
 ```
 
 JSON output keeps stable English keys for automation.

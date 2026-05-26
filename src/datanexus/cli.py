@@ -41,7 +41,7 @@ def platform_root() -> Path:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="datanexus",
+        prog="plugin_ctl",
         description="OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.",
         epilog=(
             "command groups: discovery=list/inspect; governance=plugin lint/plan/precheck/diagnose/status/check; "

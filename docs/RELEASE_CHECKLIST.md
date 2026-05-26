@@ -16,9 +16,9 @@
 - [x] Python requirement is declared as `>=3.10`.
 - [x] Runtime dependency `PyYAML>=6.0` is declared.
 - [x] Editable install works with `python -m pip install -e .`.
-- [x] Console script `opentenbase-pluginctl` is declared.
+- [x] Console script `plugin_ctl` is declared.
 - [x] Compatibility script `datanexus` is retained.
-- [x] `python -m datanexus` remains supported.
+- [x] `python -m plugin_ctl` remains supported.
 
 ## Packaging Strategy
 
@@ -64,23 +64,23 @@ Run before tagging:
 
 ```bash
 python -m unittest discover -s tests -v
-python -m datanexus list
-opentenbase-pluginctl list
-python -m datanexus plugin diagnose dnx_smoke_plugin
-python -m datanexus plugin consistency dnx_smoke_plugin
-python -m datanexus plugins status
+python -m plugin_ctl list
+plugin_ctl list
+python -m plugin_ctl plugin diagnose dnx_smoke_plugin
+python -m plugin_ctl plugin consistency dnx_smoke_plugin
+python -m plugin_ctl plugins status
 ```
 
 If local OpenTenBase is available, optionally run:
 
 ```bash
-python -m datanexus plugin precheck dnx_smoke_plugin
-python -m datanexus deploy dnx_smoke_plugin
-python -m datanexus verify dnx_smoke_plugin
-python -m datanexus rollback dnx_smoke_plugin
-python -m datanexus rollback dnx_smoke_plugin --execute
-python -m datanexus verify dnx_smoke_plugin --removed
-python -m datanexus report
+python -m plugin_ctl plugin precheck dnx_smoke_plugin
+python -m plugin_ctl deploy dnx_smoke_plugin
+python -m plugin_ctl verify dnx_smoke_plugin
+python -m plugin_ctl rollback dnx_smoke_plugin
+python -m plugin_ctl rollback dnx_smoke_plugin --execute
+python -m plugin_ctl verify dnx_smoke_plugin --removed
+python -m plugin_ctl report
 ```
 
 Latest local validation also completed the `dnx_smoke_plugin` deploy, verify, rollback dry-run, rollback execute, removed verify, and report flow.

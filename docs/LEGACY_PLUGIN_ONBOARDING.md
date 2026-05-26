@@ -63,22 +63,22 @@ No legacy plugin currently declares `rollback_sql` or `removed_probe`. This is i
 Run discovery:
 
 ```bash
-python -m datanexus list
-python -m datanexus plugins status
+python -m plugin_ctl list
+python -m plugin_ctl plugins status
 ```
 
 Run one plugin governance check:
 
 ```bash
-python -m datanexus plugin lint otb_health
-python -m datanexus plugin plan otb_health
-python -m datanexus plugin diagnose otb_health
+python -m plugin_ctl plugin lint otb_health
+python -m plugin_ctl plugin plan otb_health
+python -m plugin_ctl plugin diagnose otb_health
 ```
 
 Run lightweight smoke verification only when the plugin is already installed:
 
 ```bash
-python -m datanexus verify otb_health
+python -m plugin_ctl verify otb_health
 ```
 
 ## Current Real Environment Result

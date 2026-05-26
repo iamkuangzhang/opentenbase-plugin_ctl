@@ -12,8 +12,8 @@ This release focuses on plugin package governance, not general cluster operation
 
 ## Highlights
 
-- Console script: `opentenbase-pluginctl`
-- Compatibility entrypoints: `datanexus`, `python -m datanexus`
+- Primary console script: `plugin_ctl`
+- Compatibility entrypoints: `datanexus`, `python -m datanexus`, `opentenbase-pluginctl`, `opentenbase-plugin_ctl`
 - Safe sample plugin: `dnx_smoke_plugin`
 - Reference manifest for real plugin: `otb_timeseries`
 - Governance flow: `lint -> plan -> precheck -> diagnose -> deploy -> verify -> report`
@@ -23,23 +23,23 @@ This release focuses on plugin package governance, not general cluster operation
 ## Installation
 
 ```bash
-git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
-cd opentenbase-pluginctl
+git clone https://github.com/iamkuangzhang/opentenbase-plugin_ctl.git
+cd opentenbase-plugin_ctl
 python -m pip install -e .
-opentenbase-pluginctl list
+plugin_ctl list
 ```
 
 ## Five-Minute Trial
 
 ```bash
-python -m datanexus list
-python -m datanexus plugin lint dnx_smoke_plugin
-python -m datanexus plugin plan dnx_smoke_plugin
-python -m datanexus plugin precheck dnx_smoke_plugin
-python -m datanexus deploy dnx_smoke_plugin
-python -m datanexus verify dnx_smoke_plugin
-python -m datanexus plugin diagnose dnx_smoke_plugin
-python -m datanexus report
+python -m plugin_ctl list
+python -m plugin_ctl plugin lint dnx_smoke_plugin
+python -m plugin_ctl plugin plan dnx_smoke_plugin
+python -m plugin_ctl plugin precheck dnx_smoke_plugin
+python -m plugin_ctl deploy dnx_smoke_plugin
+python -m plugin_ctl verify dnx_smoke_plugin
+python -m plugin_ctl plugin diagnose dnx_smoke_plugin
+python -m plugin_ctl report
 ```
 
 ## Known Limitations
@@ -58,9 +58,9 @@ Validated with:
 
 ```bash
 python -m unittest discover -s tests -v
-python -m datanexus list
-opentenbase-pluginctl list
-python -m datanexus plugin diagnose dnx_smoke_plugin
-python -m datanexus plugin consistency dnx_smoke_plugin
-python -m datanexus plugins status
+python -m plugin_ctl list
+plugin_ctl list
+python -m plugin_ctl plugin diagnose dnx_smoke_plugin
+python -m plugin_ctl plugin consistency dnx_smoke_plugin
+python -m plugin_ctl plugins status
 ```

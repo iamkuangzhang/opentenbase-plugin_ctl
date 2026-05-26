@@ -10,7 +10,7 @@ OpenTenBase PluginCtl v0.1.0 is a source release candidate for CLI-first lifecyc
 - M1: safe sample plugin lifecycle loop through `dnx_smoke_plugin`, including deploy, verify, rollback dry-run/execute, removed verification, state, and report.
 - M2: plugin-centered governance flow with `plugin lint`, `plugin plan`, `plugin precheck`, `plugin diagnose`, `plugin check`, and `plugins status`.
 - M3: distributed plugin package governance with archive records, role mapping, role hook planning, and plugin-centered consistency checks.
-- M4 first stage: release-quality documentation, safety boundaries, command grouping, editable install guidance, and `opentenbase-pluginctl` console script.
+- M4 first stage: release-quality documentation, safety boundaries, command grouping, editable install guidance, and `plugin_ctl` console script.
 
 ### Current Commands
 
@@ -38,9 +38,9 @@ The release candidate has been validated with:
 
 ```bash
 python -m unittest discover -s tests -v
-python -m datanexus list
-opentenbase-pluginctl list
-python -m datanexus plugin diagnose dnx_smoke_plugin
-python -m datanexus plugin consistency dnx_smoke_plugin
-python -m datanexus plugins status
+python -m plugin_ctl list
+plugin_ctl list
+python -m plugin_ctl plugin diagnose dnx_smoke_plugin
+python -m plugin_ctl plugin consistency dnx_smoke_plugin
+python -m plugin_ctl plugins status
 ```

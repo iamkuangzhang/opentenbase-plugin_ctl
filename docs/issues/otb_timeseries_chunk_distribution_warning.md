@@ -13,7 +13,7 @@ Run the M0 smoke verification:
 ```powershell
 cd "DataNexus for OpenTenBase/platform"
 $env:PYTHONPATH = 'src'
-python -m datanexus verify otb_timeseries
+python -m plugin_ctl verify otb_timeseries
 ```
 
 The smoke recipe creates a temporary table, calls `otb_ts.create_hypertable`,

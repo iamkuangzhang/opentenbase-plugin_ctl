@@ -73,8 +73,8 @@ hooks:
 命令：
 
 ```bash
-python -m datanexus plugin roles <plugin_id>
-python -m datanexus plugin roles <plugin_id> --json
+python -m plugin_ctl plugin roles <plugin_id>
+python -m plugin_ctl plugin roles <plugin_id> --json
 ```
 
 该命令只解释插件会作用到哪些角色，不执行 deploy / verify / rollback。
@@ -98,8 +98,8 @@ python -m datanexus plugin roles <plugin_id> --json
 命令：
 
 ```bash
-python -m datanexus plugin consistency <plugin_id>
-python -m datanexus plugin consistency <plugin_id> --json
+python -m plugin_ctl plugin consistency <plugin_id>
+python -m plugin_ctl plugin consistency <plugin_id> --json
 ```
 
 该命令允许输出 warning / fail，但不会自动修复。
