@@ -120,7 +120,7 @@ Runtime:
 
 要求：
 
-- Python 3.10+
+- Python 3.11+
 - Docker 可用
 - 本地 OpenTenBase Docker 环境可用时才能运行真实 deploy / verify / precheck
 

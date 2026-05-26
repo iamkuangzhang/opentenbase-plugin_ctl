@@ -13,7 +13,7 @@
 
 ## Installation
 
-- [x] Python requirement is declared as `>=3.10`.
+- [x] Python requirement is declared as `>=3.11`.
 - [x] Runtime dependency `PyYAML>=6.0` is declared.
 - [x] Editable install works with `python -m pip install -e .`.
 - [x] Console script `plugin_ctl` is declared.

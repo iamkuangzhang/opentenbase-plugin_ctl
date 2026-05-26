@@ -18,6 +18,7 @@ class CliProductTest(unittest.TestCase):
         pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
 
         self.assertIn('name = "opentenbase-plugin_ctl"', pyproject)
+        self.assertIn('requires-python = ">=3.11"', pyproject)
         self.assertIn('plugin_ctl = "datanexus.cli:main"', pyproject)
         self.assertIn('opentenbase-pluginctl = "datanexus.cli:main"', pyproject)
         self.assertIn('opentenbase-plugin_ctl = "datanexus.cli:main"', pyproject)

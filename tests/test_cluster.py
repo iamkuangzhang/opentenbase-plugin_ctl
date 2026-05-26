@@ -1,7 +1,9 @@
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
-from datanexus.cluster import run_cluster_status
+from datanexus.cluster import load_cluster_config, run_cluster_status
 
 
 class MockRuntime:
@@ -79,6 +81,117 @@ class ClusterStatusTest(unittest.TestCase):
 
         self.assertFalse(cn_check.ok)
         self.assertEqual(cn_check.detail, "missing")
+
+
+class ClusterConfigTest(unittest.TestCase):
+    def write_config(self, text: str) -> Path:
+        tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tempdir.cleanup)
+        path = Path(tempdir.name) / "cluster.toml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_load_cluster_config_splits_coordinators_and_datanodes(self) -> None:
+        path = self.write_config(
+            """
+[[nodes]]
+name = "cn001"
+role = "cn"
+host = "10.0.0.11"
+ssh_port = 22
+db_port = 30004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/opt/otb/lib"
+extension_dir = "/opt/otb/share/extension"
+
+[[nodes]]
+name = "dn001"
+role = "dn"
+host = "10.0.0.21"
+ssh_port = 22
+db_port = 40004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/opt/otb/lib"
+extension_dir = "/opt/otb/share/extension"
+"""
+        )
+
+        config = load_cluster_config(path)
+
+        self.assertEqual([node.name for node in config.coordinators], ["cn001"])
+        self.assertEqual([node.name for node in config.datanodes], ["dn001"])
+
+    def test_load_cluster_config_rejects_duplicate_node_names(self) -> None:
+        path = self.write_config(
+            """
+[[nodes]]
+name = "same"
+role = "cn"
+host = "10.0.0.11"
+ssh_port = 22
+db_port = 30004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/opt/otb/lib"
+extension_dir = "/opt/otb/share/extension"
+
+[[nodes]]
+name = "same"
+role = "dn"
+host = "10.0.0.21"
+ssh_port = 22
+db_port = 40004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/opt/otb/lib"
+extension_dir = "/opt/otb/share/extension"
+"""
+        )
+
+        with self.assertRaisesRegex(ValueError, "duplicate node name"):
+            load_cluster_config(path)
+
+    def test_load_cluster_config_rejects_invalid_role_and_missing_dirs(self) -> None:
+        invalid_role = self.write_config(
+            """
+[[nodes]]
+name = "bad"
+role = "worker"
+host = "10.0.0.11"
+ssh_port = 22
+db_port = 30004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/opt/otb/lib"
+extension_dir = "/opt/otb/share/extension"
+"""
+        )
+        with self.assertRaisesRegex(ValueError, "invalid role"):
+            load_cluster_config(invalid_role)
+
+        missing_dir = self.write_config(
+            """
+[[nodes]]
+name = "cn001"
+role = "cn"
+host = "10.0.0.11"
+ssh_port = 22
+db_port = 30004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/opt/otb/lib"
+"""
+        )
+        with self.assertRaisesRegex(ValueError, "extension_dir"):
+            load_cluster_config(missing_dir)
 
 
 if __name__ == "__main__":

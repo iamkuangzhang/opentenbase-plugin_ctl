@@ -7,17 +7,34 @@ from typing import Any
 
 from . import __version__
 from .action_result import ActionResult
+from .activation import (
+    PsqlCoordinatorExecutor,
+    activation_report_json,
+    dry_run_activation_plan,
+    execute_activation,
+)
 from .catalog import Catalog
-from .cluster import run_cluster_status
+from .cluster import ClusterConfig, ClusterNode, load_cluster_config, run_cluster_status
 from .deploy import deploy_sql_payload
+from .distribution import (
+    build_distribution_plan,
+    distribute_payload_to_nodes,
+    distribution_plan_json,
+    distribution_results_json,
+    physical_payload_files,
+)
+from .distributed_verify import distributed_verify_report_json, run_distributed_verify
 from .doctor import run_doctor
 from .i18n import message, normalize_lang, text, value
 from .manifest import ManifestError
 from .plugin_archive import ArchiveStore, archive_list_json, archive_record_json, build_archive_record
 from .plugin_consistency import consistency_check, consistency_items_json
-from .plugin_diagnose import diagnose_plugin, diagnosis_json, diagnosis_summary_json, diagnosis_rows
+from .plugin_diagnose import PluginDiagnosis, diagnose_plugin, diagnosis_json, diagnosis_summary_json, diagnosis_rows
 from .plugin_governance import governance_status, governance_status_json, plugin_checks
 from .plugin_package import (
+    LintItem,
+    PluginPlan,
+    PrecheckItem,
     find_plugin_manifest_path,
     lint_items_json,
     lint_manifest_path,
@@ -30,7 +47,7 @@ from .plugin_roles import role_steps, role_steps_json, role_summary
 from .report import latest_by_plugin_action, latest_by_plugin_action_json, row_for_record
 from .rollback import rollback_plugin
 from .state_store import StateStore
-from .runtime.opentenbase import OpenTenBaseRuntime
+from .runtime.opentenbase import OpenTenBaseRuntime, ScpSshRemoteExecutor
 from .verify import run_removed_verify, run_smoke_verify
 from .util import render_table
 
@@ -44,9 +61,10 @@ def build_parser() -> argparse.ArgumentParser:
         prog="plugin_ctl",
         description="OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.",
         epilog=(
-            "command groups: discovery=list/inspect; governance=plugin lint/plan/precheck/diagnose/status/check; "
-            "lifecycle=deploy/verify/rollback; archive=plugin archive list/inspect; "
-            "distributed=plugin roles/consistency; reporting=state/report; runtime=doctor/cluster status"
+            "main flow: check -> deploy -> activate -> verify -> report; "
+            "advanced/debug: plugin lint/plan/precheck/diagnose, cluster distribute; "
+            "other groups: discovery=list/inspect; lifecycle=rollback; archive=plugin archive list/inspect; "
+            "distributed=plugin roles/consistency; runtime=doctor/cluster status"
         ),
     )
     parser.add_argument("--version", action="version", version=__version__)
@@ -59,6 +77,19 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser = subparsers.add_parser("inspect", help="discovery: show a plugin manifest")
     inspect_parser.add_argument("plugin_id")
 
+    check_parser = subparsers.add_parser("check", help="main flow: aggregate lint, plan, precheck, and diagnose")
+    check_parser.add_argument("plugin_id")
+    check_parser.add_argument("--json", action="store_true", help="emit aggregated check result as JSON")
+    check_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
+
+    activate_parser = subparsers.add_parser("activate", help="main flow: activate extension metadata on coordinators")
+    activate_parser.add_argument("plugin_id")
+    activate_parser.add_argument("-f", "--cluster-file", type=Path, required=True, help="cluster.toml path")
+    activate_mode = activate_parser.add_mutually_exclusive_group()
+    activate_mode.add_argument("--dry-run", action="store_true", help="show activation and version-check plan only")
+    activate_mode.add_argument("--execute", action="store_true", help="execute CREATE EXTENSION on coordinators")
+    activate_parser.add_argument("--json", action="store_true", help="emit activation report as JSON")
+
     doctor_parser = subparsers.add_parser("doctor", help="runtime: check local OpenTenBase runtime")
     doctor_parser.add_argument("--container", default="opentenbaseDN1")
     doctor_parser.add_argument("--host", default="127.0.0.1")
@@ -66,9 +97,19 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument("--user", default="opentenbase")
     doctor_parser.add_argument("--database", default="postgres")
 
-    cluster_parser = subparsers.add_parser("cluster", help="runtime: inspect local OpenTenBase cluster status")
+    cluster_parser = subparsers.add_parser("cluster", help="runtime/distributed: inspect OpenTenBase cluster status and topology")
     cluster_subparsers = cluster_parser.add_subparsers(dest="cluster_command", required=True)
     cluster_subparsers.add_parser("status", help="read-only local Docker/OpenTenBase status")
+    cluster_inspect_parser = cluster_subparsers.add_parser("inspect", help="distributed: inspect a cluster.toml topology")
+    cluster_inspect_parser.add_argument("-f", "--file", type=Path, required=True, help="cluster.toml path")
+    cluster_inspect_parser.add_argument("--json", action="store_true", help="emit topology as JSON")
+    cluster_distribute_parser = cluster_subparsers.add_parser("distribute", help="distributed: dry-run or execute physical payload distribution")
+    distribute_mode = cluster_distribute_parser.add_mutually_exclusive_group()
+    distribute_mode.add_argument("--dry-run", action="store_true", help="build a plan only; do not scp or modify remote nodes")
+    distribute_mode.add_argument("--execute", action="store_true", help="execute physical scp distribution and SHA256 verification")
+    cluster_distribute_parser.add_argument("-f", "--file", type=Path, required=True, help="cluster.toml path")
+    cluster_distribute_parser.add_argument("plugin_id")
+    cluster_distribute_parser.add_argument("--json", action="store_true", help="emit distribution plan/result as JSON")
 
     plugin_parser = subparsers.add_parser("plugin", help="plugin governance, archive, and distributed checks")
     plugin_subparsers = plugin_parser.add_subparsers(dest="plugin_command", required=True)
@@ -115,7 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
     plugins_status_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
 
     command_help = {
-        "deploy": "lifecycle: deploy one plugin package",
+        "deploy": "main flow: deploy locally, or physically distribute with -f cluster.toml",
         "verify": "lifecycle: verify one plugin package",
         "state": "reporting: show local action state",
         "rollback": "lifecycle: rollback one plugin package; dry-run unless --execute is set",
@@ -127,6 +168,13 @@ def build_parser() -> argparse.ArgumentParser:
             cmd.add_argument("plugin_id", nargs="?")
         if name == "verify":
             cmd.add_argument("--removed", action="store_true", help="verify that plugin objects are absent using removed_probe")
+            cmd.add_argument("-f", "--cluster-file", type=Path, help="cluster.toml path for distributed white-box verification")
+            cmd.add_argument("--json", action="store_true", help="with -f, emit distributed verify report as JSON")
+        if name == "deploy":
+            deploy_mode = cmd.add_mutually_exclusive_group()
+            deploy_mode.add_argument("--dry-run", action="store_true", help="with -f, build physical distribution plan only")
+            deploy_mode.add_argument("--execute", action="store_true", help="with -f, execute physical file distribution only")
+            cmd.add_argument("-f", "--cluster-file", type=Path, help="cluster.toml path for distributed physical file distribution")
         if name == "rollback":
             cmd.add_argument("--execute", action="store_true", help="execute rollback_sql instead of showing the rollback plan")
         if name == "report":
@@ -186,6 +234,209 @@ def cmd_cluster_status() -> int:
     rows = [[check.name, "yes" if check.ok else "no", check.detail] for check in checks]
     print(render_table(["check", "ok", "detail"], rows))
     return 0 if all(check.ok for check in checks) else 1
+
+
+def _node_json(node: ClusterNode) -> dict[str, object]:
+    return {
+        "name": node.name,
+        "role": node.role,
+        "host": node.host,
+        "ssh_port": node.ssh_port,
+        "db_port": node.db_port,
+        "ssh_user": node.ssh_user,
+        "db_user": node.db_user,
+        "database": node.database,
+        "lib_dir": node.lib_dir,
+        "extension_dir": node.extension_dir,
+    }
+
+
+def _cluster_inspect_json(config: ClusterConfig) -> dict[str, object]:
+    return {
+        "cluster": config.name,
+        "coordinators": [_node_json(node) for node in config.coordinators],
+        "datanodes": [_node_json(node) for node in config.datanodes],
+        "result": "OK",
+        "errors": [],
+    }
+
+
+def _render_nodes(title: str, nodes: tuple[ClusterNode, ...]) -> str:
+    rows = [
+        [
+            node.name,
+            node.host,
+            str(node.ssh_port),
+            str(node.db_port),
+            node.ssh_user,
+            node.db_user,
+            node.database,
+            node.lib_dir,
+            node.extension_dir,
+        ]
+        for node in nodes
+    ]
+    if not rows:
+        return f"{title}: none"
+    return title + ":\n" + render_table(
+        ["name", "host", "ssh_port", "db_port", "ssh_user", "db_user", "database", "lib_dir", "extension_dir"],
+        rows,
+    )
+
+
+def cmd_cluster_inspect(cluster_file: Path, *, as_json: bool = False) -> int:
+    config = load_cluster_config(cluster_file)
+    if as_json:
+        print(json.dumps(_cluster_inspect_json(config), indent=2, ensure_ascii=False))
+        return 0
+    print(f"Cluster: {config.name}")
+    print(_render_nodes("Coordinators", config.coordinators))
+    print(_render_nodes("Datanodes", config.datanodes))
+    print("Result: OK")
+    return 0
+
+
+def _distribution_summary(results) -> dict[str, int]:
+    failed = [result for result in results if not result.ok]
+    checksum_failed = [result for result in results if result.status == "checksum_failed"]
+    return {
+        "total": len(results),
+        "succeeded": len(results) - len(failed),
+        "failed": len(failed),
+        "checksum_failed": len(checksum_failed),
+    }
+
+
+def _distribution_errors(results) -> list[str]:
+    return [
+        f"{result.node}: {result.local_path} -> {result.remote_path}: {result.status}: {result.detail}"
+        for result in results
+        if not result.ok
+    ]
+
+
+def _execute_distribution_json(config: ClusterConfig, plugin_id: str, results) -> dict[str, object]:
+    summary = _distribution_summary(results)
+    result_items = distribution_results_json(results)
+    return {
+        "cluster": config.name,
+        "mode": "execute",
+        "plugin_id": plugin_id,
+        "coordinators": [node.name for node in config.coordinators],
+        "datanodes": [node.name for node in config.datanodes],
+        "plan": result_items,
+        "summary": summary,
+        "results": result_items,
+        "errors": _distribution_errors(results),
+    }
+
+
+def cmd_cluster_distribute(
+    root: Path,
+    cluster_file: Path,
+    plugin_id: str,
+    *,
+    dry_run: bool = False,
+    execute: bool = False,
+    as_json: bool = False,
+) -> int:
+    config = load_cluster_config(cluster_file)
+    manifest = Catalog(root=root).load_one(plugin_id)
+    plan = build_distribution_plan(config, manifest)
+    mode = "execute" if execute else "dry-run"
+
+    if not execute:
+        payload = distribution_plan_json(plan)
+        if as_json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 1 if plan.errors else 0
+
+        print(f"Cluster: {plan.cluster}")
+        print(f"Plugin: {plan.plugin_id}")
+        print(f"Mode: {mode}")
+        rows = [
+            [
+                entry.node,
+                entry.role,
+                entry.file_type,
+                "yes" if entry.exists else "no",
+                entry.local_path,
+                entry.remote_path,
+            ]
+            for entry in plan.plan
+        ]
+        if rows:
+            print(render_table(["node", "role", "type", "exists", "local_path", "remote_path"], rows))
+        else:
+            print("No payload files in plan.")
+        if plan.errors:
+            print("Errors:")
+            for error in plan.errors:
+                print(f"- {error}")
+            return 1
+        print("Result: OK")
+        return 0
+
+    if plan.errors:
+        payload = {
+            **distribution_plan_json(plan),
+            "mode": "execute",
+            "summary": {"total": 0, "succeeded": 0, "failed": len(plan.errors), "checksum_failed": 0},
+        }
+        if as_json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(f"Cluster: {plan.cluster}")
+            print(f"Plugin: {plan.plugin_id}")
+            print("Mode: execute")
+            print("Errors:")
+            for error in plan.errors:
+                print(f"- {error}")
+            print("Result: FAILED")
+        return 1
+
+    payload_files = list(physical_payload_files(manifest))
+    results = distribute_payload_to_nodes(config, payload_files, ScpSshRemoteExecutor())
+    if as_json:
+        print(json.dumps(_execute_distribution_json(config, plugin_id, results), indent=2, ensure_ascii=False))
+        return 0 if all(result.ok for result in results) else 1
+
+    print(f"Cluster: {config.name}")
+    print(f"Plugin: {plugin_id}")
+    print("Mode: execute")
+    rows = [
+        [
+            result.node,
+            result.role,
+            result.status,
+            result.stage,
+            str(result.returncode),
+            result.local_sha256,
+            result.remote_sha256,
+            result.local_path,
+            result.remote_path,
+        ]
+        for result in sorted(results, key=lambda item: (item.node, item.local_path, item.remote_path))
+    ]
+    if rows:
+        print(render_table(["node", "role", "status", "stage", "returncode", "local_sha256", "remote_sha256", "local_path", "remote_path"], rows))
+    else:
+        print("No payload files distributed.")
+    summary = _distribution_summary(results)
+    print(
+        "Summary: "
+        f"total={summary['total']} succeeded={summary['succeeded']} "
+        f"failed={summary['failed']} checksum_failed={summary['checksum_failed']}"
+    )
+    errors = _distribution_errors(results)
+    if errors:
+        print("Errors:")
+        for error in errors:
+            print(f"- {error}")
+        print("Result: FAILED")
+        return 1
+    print("Result: OK")
+    return 0
 
 
 def cmd_plugin_check(root: Path, plugin_id: str, *, lang: str | None = None) -> int:
@@ -257,6 +508,92 @@ def cmd_plugin_lint(root: Path, plugin_id: str, *, as_json: bool = False, lang: 
         rows = [[item.plugin_id, item.check, value(item.status, output_lang), item.detail] for item in items]
         print(render_table(["plugin_id", text("check", output_lang), text("status", output_lang), text("detail", output_lang)], rows))
     return 1 if any(item.status == "fail" for item in items) else 0
+
+
+def _aggregated_check(root: Path, plugin_id: str) -> tuple[list[LintItem], PluginPlan, list[PrecheckItem], PluginDiagnosis]:
+    manifest_path = _manifest_path_for(root, plugin_id)
+    manifest = Catalog(root=root).load_one(plugin_id)
+    runtime = OpenTenBaseRuntime()
+    lint_items = lint_manifest_path(manifest_path)
+    plan = plugin_plan(runtime, manifest)
+    precheck_items = plugin_precheck(root, runtime, manifest)
+    diagnosis = diagnose_plugin(root, runtime, manifest)
+    return lint_items, plan, precheck_items, diagnosis
+
+
+def _aggregated_check_errors(lint_items: list[LintItem], precheck_items: list[PrecheckItem], diagnosis: PluginDiagnosis) -> list[str]:
+    errors: list[str] = []
+    errors.extend(f"lint:{item.check}: {item.detail}" for item in lint_items if item.status == "fail")
+    errors.extend(f"precheck:{item.check}: {item.detail}" for item in precheck_items if item.status == "fail")
+    if diagnosis.next_action not in {"deploy", "verify", "review"}:
+        errors.append(f"diagnose:{diagnosis.next_action}: {diagnosis.risk}")
+    return errors
+
+
+def cmd_check(root: Path, plugin_id: str, *, as_json: bool = False, lang: str | None = None) -> int:
+    output_lang = normalize_lang(lang)
+    lint_items, plan, precheck_items, diagnosis = _aggregated_check(root, plugin_id)
+    errors = _aggregated_check_errors(lint_items, precheck_items, diagnosis)
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "plugin_id": plugin_id,
+                    "ok": not errors,
+                    "lint": lint_items_json(lint_items),
+                    "plan": plugin_plan_json(plan),
+                    "precheck": precheck_items_json(precheck_items),
+                    "diagnose": diagnosis_json(diagnosis),
+                    "errors": errors,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return 1 if errors else 0
+
+    print(f"Plugin: {plugin_id}")
+    print("== lint ==")
+    print(render_table(["plugin_id", text("check", output_lang), text("status", output_lang), text("detail", output_lang)], [[item.plugin_id, item.check, value(item.status, output_lang), item.detail] for item in lint_items]))
+    print("== plan ==")
+    print(
+        render_table(
+            [text("check", output_lang), text("detail", output_lang)],
+            [
+                [text("installed_state", output_lang), value(plan.installed_state, output_lang)],
+                [text("target_roles", output_lang), ", ".join(plan.target_roles) or "none"],
+                [text("deploy_plan", output_lang), plan.deploy_plan],
+                [text("verify_plan", output_lang), plan.verify_plan],
+                [text("rollback_plan", output_lang), plan.rollback_plan],
+                [text("risk", output_lang), "; ".join(plan.risks) or "none"],
+                [text("recommendation", output_lang), plan.recommendation],
+            ],
+        )
+    )
+    print("== precheck ==")
+    print(render_table(["plugin_id", text("check", output_lang), text("status", output_lang), text("detail", output_lang)], [[item.plugin_id, item.check, value(item.status, output_lang), item.detail] for item in precheck_items]))
+    print("== diagnose ==")
+    print(
+        render_table(
+            [text("check", output_lang), text("detail", output_lang)],
+            [
+                [text("package_ok", output_lang), value("yes" if diagnosis.package_ok else "no", output_lang)],
+                [text("env_ready", output_lang), value("yes" if diagnosis.env_ready else "no", output_lang)],
+                [text("installed_state", output_lang), value(diagnosis.installed_state, output_lang)],
+                [text("next_action", output_lang), value(diagnosis.next_action, output_lang)],
+                [text("risk", output_lang), diagnosis.risk],
+                [text("conclusion", output_lang), message(diagnosis.conclusion_key, output_lang)],
+            ],
+        )
+    )
+    if errors:
+        print("Errors:")
+        for error in errors:
+            print(f"- {error}")
+        print("Result: FAILED")
+        return 1
+    print("Result: OK")
+    return 0
 
 
 def cmd_plugin_plan(root: Path, plugin_id: str, *, as_json: bool = False, lang: str | None = None) -> int:
@@ -428,6 +765,73 @@ def cmd_verify(root: Path, plugin_id: str, *, removed: bool = False) -> int:
     return smoke_result.returncode or 1
 
 
+def _render_distributed_verify_report(report) -> None:
+    print(f"Cluster: {report.cluster}")
+    print(f"Plugin: {report.plugin_id}")
+    print(f"Extension: {report.extension_name}")
+    print(f"Mode: {report.mode}")
+    print(f"Physical distribution: {report.physical_distribution}")
+    print(f"CREATE EXTENSION: {report.create_extension}")
+    print("Coordinator extension check:")
+    print(
+        render_table(
+            ["node", "connected_status", "extension_status", "detected_version", "returncode"],
+            [[item.node, item.connected_status, item.extension_status, item.detected_version, str(item.returncode)] for item in report.coordinator_extensions],
+        )
+    )
+    print("Physical file checksum check:")
+    print(
+        render_table(
+            ["node", "role", "file_type", "local_path", "remote_path", "file_status", "local_sha256", "remote_sha256"],
+            [
+                [
+                    item.node,
+                    item.role,
+                    item.file_type,
+                    item.local_path,
+                    item.remote_path,
+                    item.file_status,
+                    item.local_sha256,
+                    item.remote_sha256,
+                ]
+                for item in report.file_checks
+            ],
+        )
+    )
+    print("Prepared transaction scan:")
+    print(
+        render_table(
+            ["node", "role", "prepared_transactions_count", "status"],
+            [[item.node, item.role, str(item.prepared_transactions_count), item.status] for item in report.prepared_transactions],
+        )
+    )
+    print(
+        "Summary: "
+        f"total_cn={report.summary.total_cn} total_dn={report.summary.total_dn} "
+        f"extension_consistent={report.summary.extension_consistent} "
+        f"files_checked={report.summary.files_checked} checksum_failed={report.summary.checksum_failed} "
+        f"prepared_leak={report.summary.prepared_leak} failed={report.summary.failed}"
+    )
+    if report.errors:
+        print("Errors:")
+        for error in report.errors:
+            print(f"- {error}")
+        print("Result: FAILED")
+    else:
+        print("Result: OK")
+
+
+def cmd_verify_distributed(root: Path, plugin_id: str, cluster_file: Path, *, as_json: bool = False) -> int:
+    config = load_cluster_config(cluster_file)
+    manifest = Catalog(root=root).load_one(plugin_id)
+    report = run_distributed_verify(config, manifest, PsqlCoordinatorExecutor(), ScpSshRemoteExecutor())
+    if as_json:
+        print(json.dumps(distributed_verify_report_json(report), indent=2, ensure_ascii=False))
+    else:
+        _render_distributed_verify_report(report)
+    return 1 if report.errors else 0
+
+
 def cmd_deploy(root: Path, plugin_id: str) -> int:
     catalog = Catalog(root=root)
     manifest = catalog.load_one(plugin_id)
@@ -451,6 +855,165 @@ def cmd_deploy(root: Path, plugin_id: str) -> int:
     print(result.detail)
     print(f"{manifest.plugin_id}: deploy failed")
     return result.returncode or 1
+
+
+def cmd_deploy_physical_distribution(
+    root: Path,
+    plugin_id: str,
+    cluster_file: Path,
+    *,
+    dry_run: bool = False,
+    execute: bool = False,
+) -> int:
+    config = load_cluster_config(cluster_file)
+    manifest = Catalog(root=root).load_one(plugin_id)
+    plan = build_distribution_plan(config, manifest)
+    mode = "execute" if execute else "dry-run"
+
+    if not execute:
+        print(f"Cluster: {plan.cluster}")
+        print(f"Plugin: {plan.plugin_id}")
+        print(f"Mode: {mode}")
+        print("Physical distribution: planned")
+        print("Activate: skipped")
+        print("CREATE EXTENSION: not executed")
+        rows = [
+            [
+                entry.node,
+                entry.role,
+                entry.file_type,
+                "yes" if entry.exists else "no",
+                entry.local_path,
+                entry.remote_path,
+            ]
+            for entry in plan.plan
+        ]
+        if rows:
+            print(render_table(["node", "role", "type", "exists", "local_path", "remote_path"], rows))
+        else:
+            print("No payload files in plan.")
+        if plan.errors:
+            print("Errors:")
+            for error in plan.errors:
+                print(f"- {error}")
+            print("Result: FAILED")
+            return 1
+        print("Result: OK")
+        return 0
+
+    if plan.errors:
+        print(f"Cluster: {plan.cluster}")
+        print(f"Plugin: {plan.plugin_id}")
+        print("Mode: execute")
+        print("Physical distribution: blocked")
+        print("Activate: skipped")
+        print("CREATE EXTENSION: not executed")
+        print("Errors:")
+        for error in plan.errors:
+            print(f"- {error}")
+        print("Result: FAILED")
+        return 1
+
+    results = distribute_payload_to_nodes(config, list(physical_payload_files(manifest)), ScpSshRemoteExecutor())
+    print(f"Cluster: {config.name}")
+    print(f"Plugin: {plugin_id}")
+    print("Mode: execute")
+    print("Physical distribution: executed")
+    print("Activate: skipped")
+    print("CREATE EXTENSION: not executed")
+    rows = [
+        [
+            result.node,
+            result.role,
+            result.status,
+            result.stage,
+            str(result.returncode),
+            result.local_sha256,
+            result.remote_sha256,
+            result.local_path,
+            result.remote_path,
+        ]
+        for result in sorted(results, key=lambda item: (item.node, item.local_path, item.remote_path))
+    ]
+    if rows:
+        print(render_table(["node", "role", "status", "stage", "returncode", "local_sha256", "remote_sha256", "local_path", "remote_path"], rows))
+    summary = _distribution_summary(results)
+    print(
+        "Summary: "
+        f"total={summary['total']} succeeded={summary['succeeded']} "
+        f"failed={summary['failed']} checksum_failed={summary['checksum_failed']}"
+    )
+    errors = _distribution_errors(results)
+    if errors:
+        print("Errors:")
+        for error in errors:
+            print(f"- {error}")
+        print("Result: FAILED")
+        return 1
+    print("Result: OK")
+    return 0
+
+
+def _render_activation_report(report) -> None:
+    print(f"Cluster: {report.cluster}")
+    print(f"Plugin: {report.plugin_id}")
+    print(f"Extension: {report.extension_name}")
+    print(f"Mode: {report.mode}")
+    print(f"Physical distribution: {report.physical_distribution}")
+    print(f"Datanodes: {report.datanodes}")
+    print(f"CREATE EXTENSION: {'executed' if report.mode == 'execute' else 'planned'}")
+    activation_rows = [
+        [
+            result.node,
+            result.status,
+            str(result.returncode),
+            result.sql,
+            result.stdout.strip(),
+            result.stderr.strip(),
+        ]
+        for result in report.activation
+    ]
+    if activation_rows:
+        print("Activation:")
+        print(render_table(["node", "activate_status", "returncode", "sql", "stdout", "stderr"], activation_rows))
+    version_rows = [
+        [
+            result.node,
+            result.status,
+            result.detected_version,
+            str(result.returncode),
+            result.sql,
+            result.stderr.strip(),
+        ]
+        for result in report.versions
+    ]
+    if version_rows:
+        print("Version check:")
+        print(render_table(["node", "version_status", "detected_version", "returncode", "sql", "stderr"], version_rows))
+    print(
+        "Summary: "
+        f"total_cn={report.summary.total_cn} activated={report.summary.activated} "
+        f"failed={report.summary.failed} missing={report.summary.missing} "
+        f"version_mismatch={report.summary.version_mismatch}"
+    )
+    if report.errors:
+        print("Errors:")
+        for error in report.errors:
+            print(f"- {error}")
+        print("Result: FAILED")
+    else:
+        print("Result: OK")
+
+
+def cmd_activate(root: Path, plugin_id: str, cluster_file: Path, *, execute: bool = False, as_json: bool = False) -> int:
+    config = load_cluster_config(cluster_file)
+    manifest = Catalog(root=root).load_one(plugin_id)
+    report = execute_activation(config, manifest, PsqlCoordinatorExecutor()) if execute else dry_run_activation_plan(config, manifest)
+    if as_json:
+        print(json.dumps(activation_report_json(report), indent=2, ensure_ascii=False))
+    else:
+        _render_activation_report(report)
+    return 1 if report.errors else 0
 
 
 def cmd_state(root: Path, plugin_id: str | None) -> int:
@@ -559,11 +1122,19 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_list(args.root)
         if args.command == "inspect":
             return cmd_inspect(args.root, args.plugin_id)
+        if args.command == "check":
+            return cmd_check(args.root, args.plugin_id, as_json=args.json, lang=args.lang)
+        if args.command == "activate":
+            return cmd_activate(args.root, args.plugin_id, args.cluster_file, execute=args.execute, as_json=args.json)
         if args.command == "doctor":
             return cmd_doctor(args)
         if args.command == "cluster":
             if args.cluster_command == "status":
                 return cmd_cluster_status()
+            if args.cluster_command == "inspect":
+                return cmd_cluster_inspect(args.file, as_json=args.json)
+            if args.cluster_command == "distribute":
+                return cmd_cluster_distribute(args.root, args.file, args.plugin_id, dry_run=args.dry_run, execute=args.execute, as_json=args.json)
         if args.command == "plugin":
             if args.plugin_command == "check":
                 return cmd_plugin_check(args.root, args.plugin_id, lang=args.lang)
@@ -590,16 +1161,28 @@ def main(argv: list[str] | None = None) -> int:
             if args.plugins_command == "status":
                 return cmd_plugins_status(args.root, as_json=args.json, lang=args.lang)
         if args.command == "verify":
-            return cmd_verify(args.root, args.plugin_id or "otb_timeseries", removed=args.removed)
+            plugin_id = args.plugin_id or "otb_timeseries"
+            if args.cluster_file:
+                return cmd_verify_distributed(args.root, plugin_id, args.cluster_file, as_json=args.json)
+            return cmd_verify(args.root, plugin_id, removed=args.removed)
         if args.command == "state":
             return cmd_state(args.root, args.plugin_id)
         if args.command == "report":
             return cmd_report(args.root, as_json=args.json)
         if args.command == "deploy":
-            return cmd_deploy(args.root, args.plugin_id or "otb_timeseries")
+            plugin_id = args.plugin_id or "otb_timeseries"
+            if args.cluster_file:
+                return cmd_deploy_physical_distribution(
+                    args.root,
+                    plugin_id,
+                    args.cluster_file,
+                    dry_run=args.dry_run,
+                    execute=args.execute,
+                )
+            return cmd_deploy(args.root, plugin_id)
         if args.command == "rollback":
             return cmd_rollback(args.root, args.plugin_id or "otb_timeseries", execute=args.execute)
-    except ManifestError as exc:
+    except (FileNotFoundError, ManifestError, ValueError) as exc:
         parser.error(str(exc))
 
     return 0

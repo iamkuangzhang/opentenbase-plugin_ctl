@@ -1,0 +1,53 @@
+# OpenTenBase PluginCtl real cluster topology example.
+# Copy this file to cluster.toml and adjust hosts, users, ports, and install paths.
+
+[cluster]
+name = "opentenbase-prod"
+
+[[nodes]]
+name = "cn001"
+role = "cn"
+host = "10.0.0.11"
+ssh_port = 22
+db_port = 30004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/data/opentenbase/install/opentenbase_bin_v2.0/lib/postgresql"
+extension_dir = "/data/opentenbase/install/opentenbase_bin_v2.0/share/postgresql/extension"
+
+[[nodes]]
+name = "cn002"
+role = "cn"
+host = "10.0.0.12"
+ssh_port = 22
+db_port = 30004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/data/opentenbase/install/opentenbase_bin_v2.0/lib/postgresql"
+extension_dir = "/data/opentenbase/install/opentenbase_bin_v2.0/share/postgresql/extension"
+
+[[nodes]]
+name = "dn001"
+role = "dn"
+host = "10.0.0.21"
+ssh_port = 22
+db_port = 40004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/data/opentenbase/install/opentenbase_bin_v2.0/lib/postgresql"
+extension_dir = "/data/opentenbase/install/opentenbase_bin_v2.0/share/postgresql/extension"
+
+[[nodes]]
+name = "dn002"
+role = "dn"
+host = "10.0.0.22"
+ssh_port = 22
+db_port = 40004
+ssh_user = "opentenbase"
+db_user = "opentenbase"
+database = "postgres"
+lib_dir = "/data/opentenbase/install/opentenbase_bin_v2.0/lib/postgresql"
+extension_dir = "/data/opentenbase/install/opentenbase_bin_v2.0/share/postgresql/extension"

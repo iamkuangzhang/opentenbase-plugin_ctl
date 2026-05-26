@@ -1,20 +1,16 @@
 # M3 Archive And Consistency
 
-## 定位
+## Positioning
 
-M3 的目标是把 OpenTenBase PluginCtl 从“单插件生命周期闭环”推进到“分布式插件包治理”。本阶段仍然坚持插件为中心，不做泛集群巡检，不做自动修复。
+M3 moves OpenTenBase PluginCtl from a local single-plugin lifecycle loop toward distributed plugin package governance.
 
-M3 新增能力是只读或状态记录型能力：
+This document covers the archive, role mapping, hooks, and consistency parts of M3. The distributed lifecycle flow is documented separately in `M3_DISTRIBUTED_LIFECYCLE.md`.
 
-- 插件包 archive/state 查询
-- 插件 coordinator / datanode / all 角色映射
-- 插件一致性检查
+## Archive Model
 
-## Archive / State 模型
+`plugin archive` records package-level governance snapshots. It does not replace `state` or `report`.
 
-`plugin archive` 用来记录插件包治理状态，不替代 `state/report`，而是补上“包级别可追踪记录”。
-
-Archive record 字段包括：
+Archive records include:
 
 - `plugin_id`
 - `version`
@@ -31,116 +27,89 @@ Archive record 字段包括：
 - `runtime_metadata`
 - `updated_at`
 
-其中：
+Meaning:
 
-- `state/report` 记录每次 action 的结果。
-- `archive` 记录插件包当前治理视角下的快照。
-- `checksum` 基于 manifest 和声明的 SQL 文件计算，用来发现 manifest 或包文件变更。
-- `manifest.kind` 用于区分完整归档包和引用型 manifest。
-- `package_state.payload_complete` 用于说明发布仓库里是否真的带齐了 manifest 声明的载荷文件。
+- `state/report` records action-level execution results.
+- `archive` records package-level governance state.
+- `checksum` is computed from the manifest and declared package files.
+- `manifest.kind` distinguishes a bundled package from a reference manifest.
+- `package_state.payload_complete` records whether the published repository contains all declared payload files.
 
-当前 archive 文件存放在 `.datanexus/archive.json`，属于本地运行态数据，不提交到 Git。
+The archive file is local runtime state under `.datanexus/archive.json` and is not committed to Git.
 
-## 分角色治理
+## Role Governance
 
-M3 将 manifest 中的 `distributed.required_roles` 映射到插件治理步骤：
+M3 maps `distributed.required_roles` from manifest into plugin governance steps:
 
-- `coordinator`：通常负责 `installed_probe`、`install_sql`、`verify_sql`、`rollback_sql`
-- `datanode`：当前先检查 payload presence 和目标角色声明
-- `all`：保留为后续 role hook / package sync 方向
+- `coordinator`: usually owns `installed_probe`, `install_sql`, `verify_sql`, and `rollback_sql`.
+- `datanode`: currently used for payload presence and target role declarations.
+- `all`: reserved for future role hooks and package synchronization.
 
-M3 也开始支持声明式 role hooks：
+Supported declarative role hooks:
 
 - `preinstall`
 - `postinstall`
 - `preuninstall`
 - `postuninstall`
 
-示例：
+Current hook status:
 
-```yaml
-hooks:
-  preinstall:
-    coordinator:
-      - examples/plugins/dnx_smoke_plugin/payload/hooks/preinstall.sql
-  postinstall:
-    coordinator:
-      - examples/plugins/dnx_smoke_plugin/payload/hooks/postinstall.sql
-```
+- Hooks are visible in plan, roles, diagnose, archive, and consistency.
+- Hooks are not executed automatically.
+- Future hook execution must be gated by explicit parameters such as `--execute-hooks`.
 
-当前 role hooks 只进入规划、lint、archive 和 consistency，不会自动执行。后续如要执行，必须显式纳入 deploy / rollback 的安全流程。
+## Consistency Check
 
-命令：
+`plugin consistency` is plugin-centered consistency governance, not a generic cluster patrol.
 
-```bash
-python -m plugin_ctl plugin roles <plugin_id>
-python -m plugin_ctl plugin roles <plugin_id> --json
-```
+It checks:
 
-该命令只解释插件会作用到哪些角色，不执行 deploy / verify / rollback。
+- Manifest/package lint results.
+- Whether an archive record exists.
+- Whether archive package state is complete.
+- Whether archive checksum matches current manifest/package state.
+- Whether archive version matches manifest version.
+- Whether runtime installed state can be proven through `installed_probe`.
+- Whether archive status and runtime installed state disagree.
+- Whether manifest-declared roles can be supported by the current environment.
+- Whether archived remote payload paths are still visible in the runtime container when metadata is available.
 
-## 一致性检查
-
-`plugin consistency` 是插件中心的一致性检查，不是节点巡检。
-
-检查内容包括：
-
-- manifest / package lint 中发现的文件或声明问题
-- archive record 是否存在
-- archive package state 是否完整
-- archive checksum 是否与当前 manifest/package 一致
-- archive version 是否与 manifest 一致
-- runtime installed state 是否可通过 `installed_probe` 验证
-- archive status 与 runtime installed state 是否一致
-- manifest 声明角色是否能被当前集群支持
-- archive 中记录的远端 payload 路径是否还能在运行容器中看到
-
-命令：
+Commands:
 
 ```bash
 python -m plugin_ctl plugin consistency <plugin_id>
 python -m plugin_ctl plugin consistency <plugin_id> --json
 ```
 
-该命令允许输出 warning / fail，但不会自动修复。
+The command can return warnings or failures, but it never repairs state automatically.
 
-## 当前插件视角
+## Current Plugin View
 
-`dnx_smoke_plugin`：
+`dnx_smoke_plugin`:
 
-- 平台生命周期验证插件
-- 包结构完整
-- 支持真实 deploy / verify / rollback --execute / verify --removed
-- 适合用于 archive、roles、consistency 的安全回归
+- Bundled platform lifecycle verification plugin.
+- Package payload is complete.
+- Supports deploy, verify, rollback `--execute`, and verify `--removed`.
+- Safe target for archive, roles, consistency, and distributed lifecycle regression tests.
 
-`otb_timeseries`：
+`otb_timeseries`:
 
-- 真实业务插件样例
-- 当前发布仓库是平台仓库，不包含旧项目里的完整 `src/otb_timeseries` 载荷
-- 因此 archive 会把它表达为 `reference_manifest`，而不是完整归档包
-- 可通过 `installed_probe` 识别真实环境中已安装的 `otb_ts.version()`
-- 不支持破坏性 rollback
-- chunk distribution warning 仍作为独立问题跟踪
+- Real business-plugin reference manifest.
+- The published platform repository does not include the original full `src/otb_timeseries` payload.
+- Archive marks it as a reference manifest, not a complete bundled package.
+- It can identify the runtime installed state through `otb_ts.version()`.
+- It does not support destructive rollback.
+- Its chunk distribution warning remains a tracked issue.
 
-## M3 边界
+## M3 Archive Boundary
 
-当前不做：
+Current M3 archive/consistency scope does not include:
 
-- Web UI
-- 插件市场
-- 批量 deploy
-- 版本升级系统
-- cluster start
-- 自动修复
-- 跨数据库适配
-- 对 `otb_timeseries` 做破坏性 rollback
-
-## 下一步建议
-
-M3 后续可以继续做：
-
-- role hook 规范：`preinstall / postinstall / preuninstall / postuninstall`
-- package archive 的 inspect/detail 增强
-- 基于 archive 的插件包导出和回放计划
-- 插件包文件在 coordinator/datanode 上的只读存在性检查
-- 针对 `otb_timeseries` 的干净环境安装验证，而不是只依赖 already deployed 路径
+- Web UI.
+- Plugin marketplace.
+- Batch deploy.
+- Version upgrade system.
+- Cluster start.
+- Automatic repair.
+- Cross-database adaptation.
+- Destructive rollback for `otb_timeseries`.

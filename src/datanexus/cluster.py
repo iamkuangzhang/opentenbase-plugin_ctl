@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+import tomllib
 from typing import Protocol
 
 
@@ -9,6 +11,34 @@ class ClusterCheck:
     name: str
     ok: bool
     detail: str
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterNode:
+    name: str
+    role: str
+    host: str
+    ssh_port: int
+    db_port: int
+    ssh_user: str
+    db_user: str
+    database: str
+    lib_dir: str
+    extension_dir: str
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterConfig:
+    name: str
+    nodes: tuple[ClusterNode, ...]
+
+    @property
+    def coordinators(self) -> tuple[ClusterNode, ...]:
+        return tuple(node for node in self.nodes if node.role == "cn")
+
+    @property
+    def datanodes(self) -> tuple[ClusterNode, ...]:
+        return tuple(node for node in self.nodes if node.role == "dn")
 
 
 class ClusterRuntime(Protocol):
@@ -31,6 +61,70 @@ class ClusterRuntime(Protocol):
 
 
 EXPECTED_CONTAINERS = ["opentenbaseCN", "opentenbaseDN1", "opentenbaseDN2"]
+VALID_CLUSTER_ROLES = {"cn", "dn"}
+REQUIRED_NODE_FIELDS = {
+    "name",
+    "role",
+    "host",
+    "ssh_port",
+    "db_port",
+    "ssh_user",
+    "db_user",
+    "database",
+    "lib_dir",
+    "extension_dir",
+}
+
+
+def load_cluster_config(path: str | Path) -> ClusterConfig:
+    config_path = Path(path)
+    raw = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    raw_cluster = raw.get("cluster", {})
+    if raw_cluster is None:
+        raw_cluster = {}
+    if not isinstance(raw_cluster, dict):
+        raise ValueError("[cluster] must be a table when declared")
+    cluster_name = str(raw_cluster.get("name") or config_path.stem)
+
+    raw_nodes = raw.get("nodes")
+    if not isinstance(raw_nodes, list) or not raw_nodes:
+        raise ValueError("cluster.toml must contain at least one [[nodes]] entry")
+
+    seen_names: set[str] = set()
+    nodes: list[ClusterNode] = []
+    for index, raw_node in enumerate(raw_nodes, start=1):
+        if not isinstance(raw_node, dict):
+            raise ValueError(f"node #{index} must be a table")
+
+        missing = sorted(field for field in REQUIRED_NODE_FIELDS if field not in raw_node)
+        if missing:
+            raise ValueError(f"node #{index} missing required fields: {', '.join(missing)}")
+
+        name = str(raw_node["name"])
+        if name in seen_names:
+            raise ValueError(f"duplicate node name: {name}")
+        seen_names.add(name)
+
+        role = str(raw_node["role"])
+        if role not in VALID_CLUSTER_ROLES:
+            raise ValueError(f"node {name} has invalid role: {role}")
+
+        nodes.append(
+            ClusterNode(
+                name=name,
+                role=role,
+                host=str(raw_node["host"]),
+                ssh_port=int(raw_node["ssh_port"]),
+                db_port=int(raw_node["db_port"]),
+                ssh_user=str(raw_node["ssh_user"]),
+                db_user=str(raw_node["db_user"]),
+                database=str(raw_node["database"]),
+                lib_dir=str(raw_node["lib_dir"]),
+                extension_dir=str(raw_node["extension_dir"]),
+            )
+        )
+
+    return ClusterConfig(name=cluster_name, nodes=tuple(nodes))
 
 
 def _check_process(runtime_factory, container: str, name: str, pattern: str) -> ClusterCheck:
