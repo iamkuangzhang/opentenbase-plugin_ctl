@@ -1,5 +1,7 @@
 # OpenTenBase PluginCtl
 
+[English](README.md) | [简体中文](README_zh.md)
+
 OpenTenBase PluginCtl is a CLI tool for managing the lifecycle of OpenTenBase plugins in both local Docker sandboxes and distributed OpenTenBase clusters.
 
 It focuses on plugin delivery and governance:
