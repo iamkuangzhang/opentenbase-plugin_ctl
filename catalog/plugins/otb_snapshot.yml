@@ -1,4 +1,4 @@
-plugin_id: otb_snapshot
+﻿plugin_id: otb_snapshot
 name: OpenTenBase Snapshot
 version: 1.0.0
 description: Time-series data snapshot and rollback SQL extension for OpenTenBase.
@@ -18,5 +18,5 @@ payload:
   smoke_sql: recipes/otb_snapshot_smoke.sql
   installed_probe: SELECT otb_snapshot.version();
 notes:
-  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Imported from the legacy OpenTenBase PluginCtl plugin payloads for governance validation.
   - Snapshot functions can perform destructive data operations; do not add automatic rollback.

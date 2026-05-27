@@ -1,8 +1,8 @@
-# Legacy Plugin Onboarding
+﻿# Legacy Plugin Onboarding
 
 ## Scope
 
-This document records the first onboarding pass for the legacy OpenTenBase plugin payloads from the original DataNexus project.
+This document records the first onboarding pass for the legacy OpenTenBase plugin payloads from the original plugin_ctl project.
 
 The current goal is governance validation:
 

@@ -1,11 +1,11 @@
-from pathlib import Path
+﻿from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
-from datanexus.catalog import Catalog
-from datanexus.manifest import PluginManifest
-from datanexus.rollback import rollback_plugin
+from plugin_ctl.catalog import Catalog
+from plugin_ctl.manifest import PluginManifest
+from plugin_ctl.rollback import rollback_plugin
 
 
 class DummyRuntime:

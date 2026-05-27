@@ -1,1 +1,1 @@
-SELECT otb_fulltext.version();
+﻿SELECT otb_fulltext.version();

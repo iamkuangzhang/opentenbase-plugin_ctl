@@ -1,11 +1,11 @@
-# M0 Baseline
+﻿# M0 Baseline
 
-This file freezes the current runnable baseline for the DataNexus OpenTenBase
+This file freezes the current runnable baseline for the plugin_ctl OpenTenBase
 platform layer. M1 work should keep these commands and expectations intact.
 
 ## Positioning
 
-DataNexus is a CLI-first lifecycle governance platform for OpenTenBase plugins.
+plugin_ctl is a CLI-first lifecycle governance platform for OpenTenBase plugins.
 It is not a general plugin repository and it is not web-first at this stage.
 
 M0 focuses on one closed loop for the `otb_timeseries` sample plugin:
@@ -73,7 +73,7 @@ Expected M0 behavior:
 - `doctor` confirms Docker, expected containers, `psql`, plugin probe, and 4 registered CN/DN endpoints.
 - `deploy otb_timeseries` currently exercises the already-installed path and records `already deployed: 1.0.0`.
 - `verify otb_timeseries` passes using `platform/recipes/otb_timeseries_smoke.sql`.
-- `state` and `report` read local records from `.datanexus/state.json`.
+- `state` and `report` read local records from `.plugin_ctl/state.json`.
 - `report` shows the latest record per `(plugin_id, action)`, so rollback failure does not hide deploy or verify success.
 - `rollback otb_timeseries` does not drop database objects when the manifest has no `rollback_sql`.
 
@@ -82,7 +82,7 @@ Expected M0 behavior:
 - Plugin manifests are real YAML parsed with `yaml.safe_load`.
 - `deploy`, `verify`, and `rollback` return a shared `ActionResult` shape.
 - State metadata records plugin version, return code, duration, runtime target, stdout summary, stderr summary, and action-specific metadata.
-- Runtime state is local JSON under `.datanexus/`; the directory is ignored by git.
+- Runtime state is local JSON under `.plugin_ctl/`; the directory is ignored by git.
 
 ## Known Limits
 

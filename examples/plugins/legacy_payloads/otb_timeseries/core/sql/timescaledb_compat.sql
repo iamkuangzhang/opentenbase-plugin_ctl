@@ -1,4 +1,4 @@
--- 创建 timescaledb schema（兼容命名空间）
+﻿-- 创建 timescaledb schema（兼容命名空间）
 CREATE SCHEMA IF NOT EXISTS timescaledb;
 
 -- ═══════════════════════════════════════════════════════════════

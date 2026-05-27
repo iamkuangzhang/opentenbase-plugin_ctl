@@ -1,4 +1,4 @@
--- 提示：请通过 CREATE EXTENSION 方式加载本文件（已允许直接执行用于测试）
+﻿-- 提示：请通过 CREATE EXTENSION 方式加载本文件（已允许直接执行用于测试）
 -- \echo 使用 "CREATE EXTENSION otb_timeseries" 加载本文件。 \quit
 
 -- 创建时序扩展的专用 schema

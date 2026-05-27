@@ -1,4 +1,4 @@
-# M1 Status
+﻿# M1 Status
 
 ## Completed
 
@@ -22,7 +22,7 @@ Implemented capabilities:
 
 ## Lifecycle Fixture
 
-`examples/plugins/dnx_smoke_plugin` is a platform lifecycle verification plugin,
+`examples/plugins/pluginctl_smoke_plugin` is a platform lifecycle verification plugin,
 not a business plugin.
 
 It exists to prove the Plugin Manager lifecycle chain safely:
@@ -43,10 +43,10 @@ The M1 local verification sequence is:
 ```powershell
 $env:PYTHONPATH = 'src'
 python -m plugin_ctl cluster status
-python -m plugin_ctl deploy dnx_smoke_plugin
-python -m plugin_ctl verify dnx_smoke_plugin
-python -m plugin_ctl rollback dnx_smoke_plugin --execute
-python -m plugin_ctl verify dnx_smoke_plugin --removed
+python -m plugin_ctl deploy pluginctl_smoke_plugin
+python -m plugin_ctl verify pluginctl_smoke_plugin
+python -m plugin_ctl rollback pluginctl_smoke_plugin --execute
+python -m plugin_ctl verify pluginctl_smoke_plugin --removed
 python -m plugin_ctl deploy otb_timeseries
 python -m plugin_ctl verify otb_timeseries
 python -m plugin_ctl report

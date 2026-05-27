@@ -1,4 +1,4 @@
-# M3 Final Status
+﻿# M3 Final Status
 
 ## Freeze Conclusion
 
@@ -14,11 +14,10 @@ python -m plugin_ctl verify <plugin_id> -f cluster.toml
 python -m plugin_ctl report
 ```
 
-Compatibility entrypoints remain available:
+Supported entrypoints:
 
 ```bash
-python -m datanexus ...
-datanexus ...
+python -m plugin_ctl ...
 plugin_ctl ...
 opentenbase-pluginctl ...
 opentenbase-plugin_ctl ...

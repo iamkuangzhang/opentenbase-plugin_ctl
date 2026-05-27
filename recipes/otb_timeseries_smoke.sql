@@ -1,4 +1,4 @@
--- DataNexus platform smoke verify for otb_timeseries
+﻿-- OpenTenBase PluginCtl platform smoke verify for otb_timeseries
 -- Lightweight checks only: version, hypertable creation, time_bucket, first/last.
 
 SET client_min_messages TO WARNING;

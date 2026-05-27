@@ -1,4 +1,4 @@
-# M1 Deploy Clean-Environment Verification Plan
+﻿# M1 Deploy Clean-Environment Verification Plan
 
 ## Current State
 
@@ -21,7 +21,7 @@ The uninstalled path is currently covered by mock runtime tests:
 
 ## Implemented First Step
 
-`examples/plugins/dnx_smoke_plugin` has been added as a controlled sample
+`examples/plugins/pluginctl_smoke_plugin` has been added as a controlled sample
 plugin for platform deploy-chain verification.
 
 It validates the uninstalled deploy path without touching `otb_timeseries`:

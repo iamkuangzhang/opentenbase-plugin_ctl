@@ -1,4 +1,4 @@
-plugin_id: otb_age
+﻿plugin_id: otb_age
 name: OpenTenBase AGE
 version: 1.0.0
 description: Apache AGE compatible graph database extension for OpenTenBase.
@@ -20,5 +20,5 @@ payload:
   installed_probe: SELECT otb_age.version();
   requires_build: true
 notes:
-  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Imported from the legacy OpenTenBase PluginCtl plugin payloads for governance validation.
   - Do not deploy until native shared-library build/install is prepared.

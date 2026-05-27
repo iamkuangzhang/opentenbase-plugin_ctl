@@ -1,12 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from datanexus.cluster import ClusterNode
-from datanexus.runtime.opentenbase import ScpSshRemoteExecutor
+from plugin_ctl.cluster import ClusterNode
+from plugin_ctl.runtime.opentenbase import ScpSshRemoteExecutor
 
 
 class RemoteExecutorTest(unittest.TestCase):

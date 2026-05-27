@@ -1,14 +1,14 @@
-from pathlib import Path
+﻿from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
-from datanexus.manifest import load_manifest
-from datanexus.plugin_archive import ArchiveStore, archive_record_json, build_archive_record, manifest_checksum
-from datanexus.plugin_consistency import consistency_check, consistency_items_json
-from datanexus.plugin_diagnose import diagnose_plugin
-from datanexus.plugin_roles import manifest_roles, role_hooks, role_hooks_json, role_steps, role_steps_json
-from datanexus.state_store import StateStore
+from plugin_ctl.manifest import load_manifest
+from plugin_ctl.plugin_archive import ArchiveStore, archive_record_json, build_archive_record, manifest_checksum
+from plugin_ctl.plugin_consistency import consistency_check, consistency_items_json
+from plugin_ctl.plugin_diagnose import diagnose_plugin
+from plugin_ctl.plugin_roles import manifest_roles, role_hooks, role_hooks_json, role_steps, role_steps_json
+from plugin_ctl.state_store import StateStore
 
 
 class Runtime:
@@ -102,7 +102,7 @@ class PluginArchiveTest(unittest.TestCase):
                 "deploy",
                 True,
                 "deployed",
-                {"version": "0.1.0", "cluster": "test", "container": "cn", "remote_root": "/tmp/datanexus/archive_plugin_test"},
+                {"version": "0.1.0", "cluster": "test", "container": "cn", "remote_root": "/tmp/plugin_ctl/archive_plugin_test"},
             )
             diagnosis = diagnose_plugin(root, Runtime(installed=True), manifest)
 
@@ -184,7 +184,7 @@ class PluginArchiveTest(unittest.TestCase):
                 "deploy",
                 True,
                 "deployed",
-                {"version": "0.1.0", "remote_root": "/tmp/datanexus/archive_plugin_test"},
+                {"version": "0.1.0", "remote_root": "/tmp/plugin_ctl/archive_plugin_test"},
             )
             ArchiveStore(root).upsert(build_archive_record(root, manifest, diagnose_plugin(root, Runtime(installed=True), manifest)))
 

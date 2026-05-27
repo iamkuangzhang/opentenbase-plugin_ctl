@@ -1,10 +1,10 @@
-from pathlib import Path
+﻿from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 
-from datanexus.manifest import load_manifest
-from datanexus.plugin_package import (
+from plugin_ctl.manifest import load_manifest
+from plugin_ctl.plugin_package import (
     lint_items_json,
     lint_manifest_path,
     plugin_precheck,
@@ -248,13 +248,13 @@ class PluginPackagePlanTest(unittest.TestCase):
 
     def test_plan_real_manifests_have_expected_governance_shape(self) -> None:
         platform_root = Path(__file__).resolve().parents[1]
-        smoke = load_manifest(platform_root / "examples" / "plugins" / "dnx_smoke_plugin" / "manifest.yml")
+        smoke = load_manifest(platform_root / "examples" / "plugins" / "pluginctl_smoke_plugin" / "manifest.yml")
         otb = load_manifest(platform_root / "catalog" / "plugins" / "otb_timeseries.yml")
 
         smoke_plan = plugin_plan(ProbeRuntime(returncode=1, stderr="missing"), smoke)
         otb_plan = plugin_plan(ProbeRuntime(returncode=0, stdout="1.0.0\n"), otb)
 
-        self.assertEqual(smoke_plan.plugin_id, "dnx_smoke_plugin")
+        self.assertEqual(smoke_plan.plugin_id, "pluginctl_smoke_plugin")
         self.assertIn("rollback.sql", smoke_plan.rollback_plan)
         self.assertEqual(otb_plan.installed_state, "installed")
         self.assertIn("rollback unsupported", otb_plan.risks)

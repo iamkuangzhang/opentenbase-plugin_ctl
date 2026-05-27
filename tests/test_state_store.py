@@ -1,8 +1,8 @@
-from pathlib import Path
+﻿from pathlib import Path
 import tempfile
 import unittest
 
-from datanexus.state_store import StateStore
+from plugin_ctl.state_store import StateStore
 
 
 class StateStoreTest(unittest.TestCase):

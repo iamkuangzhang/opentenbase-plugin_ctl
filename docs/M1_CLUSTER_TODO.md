@@ -1,6 +1,6 @@
-# M1 Cluster Status/Start TODO
+﻿# M1 Cluster Status/Start TODO
 
-`datanexus cluster status` is implemented as a read-only command. `cluster
+`plugin_ctl cluster status` is implemented as a read-only command. `cluster
 start` remains a design note and is not implemented.
 
 ## Why This Comes Before Complex Rollback
@@ -13,7 +13,7 @@ they can test platform behavior.
 For M1, a narrow local-only cluster helper has higher practical value than
 building destructive rollback behavior early.
 
-## `datanexus cluster status`
+## `plugin_ctl cluster status`
 
 The first version checks only the current local Docker topology:
 
@@ -33,7 +33,7 @@ The command returns a table similar to `doctor`, but scoped to process and
 cluster liveness rather than plugin readiness. It does not start, stop, or
 modify containers.
 
-## `datanexus cluster start`
+## `plugin_ctl cluster start`
 
 This remains TODO. First version should be explicit and local-environment-only. It can call the
 same validated startup commands currently used manually:

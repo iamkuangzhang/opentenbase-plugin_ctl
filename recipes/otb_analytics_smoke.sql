@@ -1,1 +1,1 @@
-SELECT otb_analytics.version();
+﻿SELECT otb_analytics.version();

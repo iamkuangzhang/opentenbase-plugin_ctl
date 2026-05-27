@@ -1,4 +1,4 @@
-plugin_id: otb_scheduler
+﻿plugin_id: otb_scheduler
 name: OpenTenBase Scheduler
 version: 1.0.0
 description: Task scheduling and partition management compatibility layer for OpenTenBase.
@@ -19,5 +19,5 @@ payload:
   installed_probe: SELECT otb_scheduler.version();
   destructive_install: true
 notes:
-  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Imported from the legacy OpenTenBase PluginCtl plugin payloads for governance validation.
   - Install SQL drops/recreates the schema; review before any real deploy.

@@ -1,11 +1,11 @@
-# M2 Plugin Governance
+﻿# M2 Plugin Governance
 
 ## Direction
 
-M2 keeps DataNexus centered on plugins. Distributed and cluster information is
+M2 keeps plugin_ctl centered on plugins. Distributed and cluster information is
 used only as context for plugin governance.
 
-DataNexus is not an OpenTenBase cluster inspection platform. It should answer:
+plugin_ctl is not an OpenTenBase cluster inspection platform. It should answer:
 
 - What does this plugin declare?
 - Is the manifest complete enough for lifecycle management?

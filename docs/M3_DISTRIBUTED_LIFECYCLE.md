@@ -1,4 +1,4 @@
-# M3 Distributed Lifecycle
+﻿# M3 Distributed Lifecycle
 
 ## Purpose
 

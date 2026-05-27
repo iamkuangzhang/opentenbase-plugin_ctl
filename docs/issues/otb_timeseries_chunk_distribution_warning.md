@@ -1,4 +1,4 @@
-# otb_timeseries Chunk Distribution Warning
+﻿# otb_timeseries Chunk Distribution Warning
 
 ## Status
 
@@ -11,7 +11,7 @@ issue, not hidden inside the platform layer.
 Run the M0 smoke verification:
 
 ```powershell
-cd "DataNexus for OpenTenBase/platform"
+cd "plugin_ctl for OpenTenBase/platform"
 $env:PYTHONPATH = 'src'
 python -m plugin_ctl verify otb_timeseries
 ```

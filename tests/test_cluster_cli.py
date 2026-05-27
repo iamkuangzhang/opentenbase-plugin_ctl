@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import io
 import json
@@ -9,9 +9,9 @@ from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
-from datanexus.cli import main
-from datanexus.cluster import ClusterNode
-from datanexus.runtime.opentenbase import RemoteCommandResult
+from plugin_ctl.cli import main
+from plugin_ctl.cluster import ClusterNode
+from plugin_ctl.runtime.opentenbase import RemoteCommandResult
 
 
 CLUSTER_TOML = """
@@ -92,7 +92,7 @@ class ClusterCliTest(unittest.TestCase):
                 "--dry-run",
                 "-f",
                 str(self.cluster_file),
-                "dnx_smoke_plugin",
+                "pluginctl_smoke_plugin",
                 "--json",
             ]
         )
@@ -101,7 +101,7 @@ class ClusterCliTest(unittest.TestCase):
         payload = json.loads(output)
         self.assertEqual(payload["cluster"], "m3-test")
         self.assertEqual(payload["mode"], "dry-run")
-        self.assertEqual(payload["plugin_id"], "dnx_smoke_plugin")
+        self.assertEqual(payload["plugin_id"], "pluginctl_smoke_plugin")
         self.assertEqual(payload["errors"], [])
         self.assertTrue(payload["plan"])
         self.assertIn("coordinators", payload)
@@ -118,13 +118,13 @@ class ClusterCliTest(unittest.TestCase):
                 "--dry-run",
                 "-f",
                 str(self.cluster_file),
-                "dnx_smoke_plugin",
+                "pluginctl_smoke_plugin",
             ]
         )
 
         self.assertEqual(code, 0)
         self.assertIn("Mode: dry-run", output)
-        self.assertIn("dnx_smoke_plugin", output)
+        self.assertIn("pluginctl_smoke_plugin", output)
         self.assertIn("install.sql", output)
         self.assertIn("Result: OK", output)
 
@@ -137,7 +137,7 @@ class ClusterCliTest(unittest.TestCase):
                 "distribute",
                 "-f",
                 str(self.cluster_file),
-                "dnx_smoke_plugin",
+                "pluginctl_smoke_plugin",
             ]
         )
 
@@ -157,13 +157,13 @@ class ClusterCliTest(unittest.TestCase):
                         "--execute",
                         "-f",
                         str(self.cluster_file),
-                        "dnx_smoke_plugin",
+                        "pluginctl_smoke_plugin",
                     ]
                 )
 
     def test_cluster_distribute_execute_uses_real_execute_path_with_fake_executor(self) -> None:
         fake = FakeRemoteExecutor()
-        with patch("datanexus.cli.ScpSshRemoteExecutor", return_value=fake):
+        with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
             code, output = self._run(
                 [
                     "--root",
@@ -173,7 +173,7 @@ class ClusterCliTest(unittest.TestCase):
                     "--execute",
                     "-f",
                     str(self.cluster_file),
-                    "dnx_smoke_plugin",
+                    "pluginctl_smoke_plugin",
                 ]
             )
 
@@ -185,7 +185,7 @@ class ClusterCliTest(unittest.TestCase):
 
     def test_cluster_distribute_execute_json_output_is_stable(self) -> None:
         fake = FakeRemoteExecutor()
-        with patch("datanexus.cli.ScpSshRemoteExecutor", return_value=fake):
+        with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
             code, output = self._run(
                 [
                     "--root",
@@ -195,7 +195,7 @@ class ClusterCliTest(unittest.TestCase):
                     "--execute",
                     "-f",
                     str(self.cluster_file),
-                    "dnx_smoke_plugin",
+                    "pluginctl_smoke_plugin",
                     "--json",
                 ]
             )
@@ -204,7 +204,7 @@ class ClusterCliTest(unittest.TestCase):
         payload = json.loads(output)
         self.assertEqual(payload["cluster"], "m3-test")
         self.assertEqual(payload["mode"], "execute")
-        self.assertEqual(payload["plugin_id"], "dnx_smoke_plugin")
+        self.assertEqual(payload["plugin_id"], "pluginctl_smoke_plugin")
         self.assertIn("summary", payload)
         self.assertIn("plan", payload)
         self.assertIn("results", payload)
@@ -217,7 +217,7 @@ class ClusterCliTest(unittest.TestCase):
 
     def test_cluster_distribute_execute_json_reports_checksum_failure(self) -> None:
         fake = FakeRemoteExecutor(mismatch_checksum_for="dn001")
-        with patch("datanexus.cli.ScpSshRemoteExecutor", return_value=fake):
+        with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
             code, output = self._run(
                 [
                     "--root",
@@ -227,7 +227,7 @@ class ClusterCliTest(unittest.TestCase):
                     "--execute",
                     "-f",
                     str(self.cluster_file),
-                    "dnx_smoke_plugin",
+                    "pluginctl_smoke_plugin",
                     "--json",
                 ]
             )
@@ -240,7 +240,7 @@ class ClusterCliTest(unittest.TestCase):
     def test_cluster_distribute_dry_run_reports_missing_payload_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
-            (root / "src" / "datanexus").mkdir(parents=True)
+            (root / "src" / "plugin_ctl").mkdir(parents=True)
             (root / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
             manifest_dir = root / "catalog" / "plugins"
             manifest_dir.mkdir(parents=True)

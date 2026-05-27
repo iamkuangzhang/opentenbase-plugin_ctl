@@ -1,1 +1,1 @@
-SELECT otb_routing.version();
+﻿SELECT otb_routing.version();

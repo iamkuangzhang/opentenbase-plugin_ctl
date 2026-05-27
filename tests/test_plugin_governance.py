@@ -1,13 +1,13 @@
-from pathlib import Path
+﻿from pathlib import Path
 import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from datanexus.cli import cmd_plugin_status
-from datanexus.manifest import PluginManifest
-from datanexus.plugin_governance import governance_status, governance_status_json, plugin_checks
-from datanexus.state_store import StateStore
+from plugin_ctl.cli import cmd_plugin_status
+from plugin_ctl.manifest import PluginManifest
+from plugin_ctl.plugin_governance import governance_status, governance_status_json, plugin_checks
+from plugin_ctl.state_store import StateStore
 
 
 class GovernanceRuntime:
@@ -202,7 +202,7 @@ class PluginGovernanceTest(unittest.TestCase):
                 {"SELECT ready.version();": subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="1.0.0\n", stderr="")}
             )
 
-            with patch("datanexus.cli.OpenTenBaseRuntime", return_value=runtime), patch("builtins.print") as mocked_print:
+            with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=runtime), patch("builtins.print") as mocked_print:
                 result = cmd_plugin_status(root / "platform", "ready_plugin", lang="both")
 
             self.assertEqual(result, 0)

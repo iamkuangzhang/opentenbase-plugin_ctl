@@ -1,1 +1,1 @@
-SELECT otb_snapshot.version();
+﻿SELECT otb_snapshot.version();

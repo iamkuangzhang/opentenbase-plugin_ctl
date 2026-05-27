@@ -1,5 +1,6 @@
-"""Compatibility package for the plugin_ctl command namespace."""
-
-from datanexus import __version__
+﻿"""plugin_ctl platform package."""
 
 __all__ = ["__version__"]
+
+__version__ = "0.1.0"
+

@@ -1,4 +1,4 @@
-include README.md
+﻿include README.md
 include LICENSE
 include CHANGELOG.md
 include pyproject.toml
@@ -9,4 +9,4 @@ recursive-include recipes *.sql
 recursive-include tests *.py
 global-exclude __pycache__/*
 global-exclude *.py[cod]
-global-exclude .datanexus/*
+global-exclude .plugin_ctl/*

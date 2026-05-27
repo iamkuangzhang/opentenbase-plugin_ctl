@@ -1,4 +1,4 @@
-# M4 Release Quality
+﻿# M4 Release Quality
 
 ## 目标
 
@@ -42,10 +42,10 @@ python -m plugin_ctl verify <plugin_id> --removed
 说明：
 
 - `deploy` 会复制 payload 到容器临时目录并执行 `install_sql`。
-- `verify` 会执行 smoke SQL，并写入本地 `.datanexus/state.json`。
+- `verify` 会执行 smoke SQL，并写入本地 `.plugin_ctl/state.json`。
 - `rollback` 默认 dry-run，只有传入 `--execute` 才会执行 `rollback_sql`。
 - `rollback` 是 best-effort，因为数据库对象、函数、schema、分布式表和节点状态不一定能被一个脚本完全恢复。
-- `report/state/archive` 读取或写入的是本地 `.datanexus/` 运行态记录，不是远端数据库元数据的权威替代。
+- `report/state/archive` 读取或写入的是本地 `.plugin_ctl/` 运行态记录，不是远端数据库元数据的权威替代。
 
 ## Role Hook 策略
 
@@ -136,7 +136,7 @@ python -m pip install -e .
 
 ```bash
 plugin_ctl list
-datanexus list
+plugin_ctl list
 ```
 
 也可以不安装，直接设置 `PYTHONPATH`：
@@ -174,26 +174,26 @@ python -m plugin_ctl cluster status
 
 ```bash
 python -m plugin_ctl list
-python -m plugin_ctl plugin lint dnx_smoke_plugin
-python -m plugin_ctl plugin plan dnx_smoke_plugin
-python -m plugin_ctl plugin precheck dnx_smoke_plugin
-python -m plugin_ctl deploy dnx_smoke_plugin
-python -m plugin_ctl verify dnx_smoke_plugin
-python -m plugin_ctl plugin diagnose dnx_smoke_plugin
+python -m plugin_ctl plugin lint pluginctl_smoke_plugin
+python -m plugin_ctl plugin plan pluginctl_smoke_plugin
+python -m plugin_ctl plugin precheck pluginctl_smoke_plugin
+python -m plugin_ctl deploy pluginctl_smoke_plugin
+python -m plugin_ctl verify pluginctl_smoke_plugin
+python -m plugin_ctl plugin diagnose pluginctl_smoke_plugin
 python -m plugin_ctl report
 ```
 
 如需回滚样例插件：
 
 ```bash
-python -m plugin_ctl rollback dnx_smoke_plugin
-python -m plugin_ctl rollback dnx_smoke_plugin --execute
-python -m plugin_ctl verify dnx_smoke_plugin --removed
+python -m plugin_ctl rollback pluginctl_smoke_plugin
+python -m plugin_ctl rollback pluginctl_smoke_plugin --execute
+python -m plugin_ctl verify pluginctl_smoke_plugin --removed
 ```
 
 ## 插件说明
 
-`dnx_smoke_plugin` 是 bundled package。它包含完整 manifest、payload、install SQL、verify SQL、rollback SQL 和 role hooks，适合演示完整生命周期。
+`pluginctl_smoke_plugin` 是 bundled package。它包含完整 manifest、payload、install SQL、verify SQL、rollback SQL 和 role hooks，适合演示完整生命周期。
 
 `otb_timeseries` 是 reference manifest。当前发布仓库不携带旧项目中的完整 `src/otb_timeseries` 载荷，因此它可以展示 runtime installed state 和分布式治理视角，但不能证明完整干净安装链路。
 

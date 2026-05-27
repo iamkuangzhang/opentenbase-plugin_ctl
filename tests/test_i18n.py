@@ -1,6 +1,6 @@
-import unittest
+﻿import unittest
 
-from datanexus.i18n import normalize_lang, text, value
+from plugin_ctl.i18n import normalize_lang, text, value
 
 
 class I18nTest(unittest.TestCase):

@@ -1,4 +1,4 @@
-[build-system]
+﻿[build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
@@ -15,10 +15,9 @@ dependencies = [
 ]
 
 [project.scripts]
-plugin_ctl = "datanexus.cli:main"
-datanexus = "datanexus.cli:main"
-opentenbase-pluginctl = "datanexus.cli:main"
-opentenbase-plugin_ctl = "datanexus.cli:main"
+plugin_ctl = "plugin_ctl.cli:main"
+opentenbase-pluginctl = "plugin_ctl.cli:main"
+opentenbase-plugin_ctl = "plugin_ctl.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

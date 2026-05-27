@@ -1,4 +1,4 @@
-# Contributing
+﻿# Contributing
 
 OpenTenBase PluginCtl is currently in the v0.1.0 source release stage. Contributions should keep the project focused on OpenTenBase distributed plugin lifecycle governance.
 

@@ -1,9 +1,9 @@
-import subprocess
+﻿import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from datanexus.cluster import load_cluster_config, run_cluster_status
+from plugin_ctl.cluster import load_cluster_config, run_cluster_status
 
 
 class MockRuntime:

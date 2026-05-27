@@ -1,1 +1,1 @@
-SELECT otb_health.version();
+﻿SELECT otb_health.version();

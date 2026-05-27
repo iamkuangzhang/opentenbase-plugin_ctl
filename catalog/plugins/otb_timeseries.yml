@@ -1,7 +1,7 @@
-plugin_id: otb_timeseries
+﻿plugin_id: otb_timeseries
 name: OpenTenBase TimeSeries
 version: 1.0.0
-description: Sample time-series plugin for the first DataNexus closed loop.
+description: Sample time-series plugin for the first OpenTenBase PluginCtl closed loop.
 database: OpenTenBase
 targets:
   cn: true
@@ -19,5 +19,5 @@ payload:
   smoke_sql: recipes/otb_timeseries_smoke.sql
   installed_probe: SELECT otb_ts.version();
 notes:
-  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Imported from the legacy OpenTenBase PluginCtl plugin payloads for governance validation.
   - Do not add destructive rollback for this real plugin sample.

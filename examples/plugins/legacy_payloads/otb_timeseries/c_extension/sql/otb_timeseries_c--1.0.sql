@@ -1,4 +1,4 @@
--- OpenTenBase TimeSeries C Extension - Installation Script
+﻿-- OpenTenBase TimeSeries C Extension - Installation Script
 -- Version 1.0
 --
 -- 高性能时序数据处理函数（C实现）

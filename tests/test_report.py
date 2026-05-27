@@ -1,11 +1,11 @@
-import json
+﻿import json
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from datanexus.cli import cmd_report
-from datanexus.state_store import StateStore
+from plugin_ctl.cli import cmd_report
+from plugin_ctl.state_store import StateStore
 
 
 class ReportTest(unittest.TestCase):
@@ -31,7 +31,7 @@ class ReportTest(unittest.TestCase):
             root = Path(tmpdir)
             store = StateStore(root)
             store.append(
-                "dnx_smoke_plugin",
+                "pluginctl_smoke_plugin",
                 "deploy",
                 True,
                 "deploy sql payload passed",
@@ -48,7 +48,7 @@ class ReportTest(unittest.TestCase):
 
             self.assertEqual(result, 0)
             payload = json.loads(mocked_print.call_args.args[0])
-            self.assertEqual(payload[0]["plugin_id"], "dnx_smoke_plugin")
+            self.assertEqual(payload[0]["plugin_id"], "pluginctl_smoke_plugin")
             self.assertEqual(payload[0]["action"], "deploy")
             self.assertTrue(payload[0]["ok"])
             self.assertEqual(payload[0]["version"], "0.1.0")

@@ -1,4 +1,4 @@
--- OpenTenBase TimeSeries Extension v1.0
+﻿-- OpenTenBase TimeSeries Extension v1.0
 -- TimescaleDB-compatible time-series data management for OpenTenBase
 --
 -- 提示：请通过 CREATE EXTENSION 方式加载本文件

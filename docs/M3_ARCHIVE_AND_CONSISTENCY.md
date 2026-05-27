@@ -1,4 +1,4 @@
-# M3 Archive And Consistency
+﻿# M3 Archive And Consistency
 
 ## Positioning
 
@@ -35,7 +35,7 @@ Meaning:
 - `manifest.kind` distinguishes a bundled package from a reference manifest.
 - `package_state.payload_complete` records whether the published repository contains all declared payload files.
 
-The archive file is local runtime state under `.datanexus/archive.json` and is not committed to Git.
+The archive file is local runtime state under `.plugin_ctl/archive.json` and is not committed to Git.
 
 ## Role Governance
 
@@ -85,7 +85,7 @@ The command can return warnings or failures, but it never repairs state automati
 
 ## Current Plugin View
 
-`dnx_smoke_plugin`:
+`pluginctl_smoke_plugin`:
 
 - Bundled platform lifecycle verification plugin.
 - Package payload is complete.

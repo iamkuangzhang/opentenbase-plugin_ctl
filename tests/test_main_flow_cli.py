@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import io
 import json
@@ -10,9 +10,9 @@ from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
-from datanexus.cli import main
-from datanexus.cluster import ClusterNode
-from datanexus.runtime.opentenbase import RemoteCommandResult
+from plugin_ctl.cli import main
+from plugin_ctl.cluster import ClusterNode
+from plugin_ctl.runtime.opentenbase import RemoteCommandResult
 
 
 CLUSTER_TOML = """
@@ -111,8 +111,8 @@ class MainFlowCliTest(unittest.TestCase):
         return code, output.getvalue()
 
     def test_check_aggregates_lint_plan_precheck_and_diagnose(self) -> None:
-        with patch("datanexus.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
-            code, output = self._run(["--root", str(self.root), "check", "dnx_smoke_plugin"])
+        with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
+            code, output = self._run(["--root", str(self.root), "check", "pluginctl_smoke_plugin"])
 
         self.assertEqual(code, 0)
         self.assertIn("== lint ==", output)
@@ -122,12 +122,12 @@ class MainFlowCliTest(unittest.TestCase):
         self.assertIn("Result: OK", output)
 
     def test_check_json_has_stable_keys(self) -> None:
-        with patch("datanexus.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
-            code, output = self._run(["--root", str(self.root), "check", "dnx_smoke_plugin", "--json"])
+        with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
+            code, output = self._run(["--root", str(self.root), "check", "pluginctl_smoke_plugin", "--json"])
 
         self.assertEqual(code, 0)
         payload = json.loads(output)
-        self.assertEqual(payload["plugin_id"], "dnx_smoke_plugin")
+        self.assertEqual(payload["plugin_id"], "pluginctl_smoke_plugin")
         self.assertTrue(payload["ok"])
         for key in ["lint", "plan", "precheck", "diagnose", "errors"]:
             self.assertIn(key, payload)
@@ -135,7 +135,7 @@ class MainFlowCliTest(unittest.TestCase):
     def test_check_returns_nonzero_for_blocking_lint_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
-            (root / "src" / "datanexus").mkdir(parents=True)
+            (root / "src" / "plugin_ctl").mkdir(parents=True)
             (root / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
             manifest_dir = root / "catalog" / "plugins"
             manifest_dir.mkdir(parents=True)
@@ -157,7 +157,7 @@ payload:
 """,
                 encoding="utf-8",
             )
-            with patch("datanexus.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
+            with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
                 code, output = self._run(["--root", str(root), "check", "broken", "--json"])
 
         self.assertEqual(code, 1)
@@ -166,9 +166,9 @@ payload:
         self.assertTrue(payload["errors"])
 
     def test_deploy_with_cluster_file_defaults_to_physical_dry_run(self) -> None:
-        with patch("datanexus.cli.ScpSshRemoteExecutor", side_effect=AssertionError("dry-run must not create executor")):
+        with patch("plugin_ctl.cli.ScpSshRemoteExecutor", side_effect=AssertionError("dry-run must not create executor")):
             code, output = self._run(
-                ["--root", str(self.root), "deploy", "dnx_smoke_plugin", "-f", str(self.cluster_file)]
+                ["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)]
             )
 
         self.assertEqual(code, 0)
@@ -179,9 +179,9 @@ payload:
 
     def test_deploy_with_cluster_file_execute_uses_physical_distribution(self) -> None:
         fake = FakeRemoteExecutor()
-        with patch("datanexus.cli.ScpSshRemoteExecutor", return_value=fake):
+        with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
             code, output = self._run(
-                ["--root", str(self.root), "deploy", "dnx_smoke_plugin", "-f", str(self.cluster_file), "--execute"]
+                ["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute"]
             )
 
         self.assertEqual(code, 0)
@@ -200,7 +200,7 @@ payload:
                         "--root",
                         str(self.root),
                         "deploy",
-                        "dnx_smoke_plugin",
+                        "pluginctl_smoke_plugin",
                         "-f",
                         str(self.cluster_file),
                         "--dry-run",

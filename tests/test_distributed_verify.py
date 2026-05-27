@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import io
 import json
@@ -10,11 +10,11 @@ from hashlib import sha256
 from pathlib import Path
 from unittest.mock import patch
 
-from datanexus.catalog import Catalog
-from datanexus.cli import main
-from datanexus.cluster import ClusterConfig, ClusterNode
-from datanexus.distributed_verify import run_distributed_verify
-from datanexus.runtime.opentenbase import RemoteCommandResult
+from plugin_ctl.catalog import Catalog
+from plugin_ctl.cli import main
+from plugin_ctl.cluster import ClusterConfig, ClusterNode
+from plugin_ctl.distributed_verify import run_distributed_verify
+from plugin_ctl.runtime.opentenbase import RemoteCommandResult
 
 
 CLUSTER_TOML = """
@@ -115,7 +115,7 @@ class FakeRemoteExecutor:
 class DistributedVerifyTest(unittest.TestCase):
     def setUp(self) -> None:
         self.root = Path(__file__).resolve().parents[1]
-        self.manifest = Catalog(root=self.root).load_one("dnx_smoke_plugin")
+        self.manifest = Catalog(root=self.root).load_one("pluginctl_smoke_plugin")
         self.cluster = ClusterConfig(
             name="verify-test",
             nodes=(
@@ -212,16 +212,16 @@ class DistributedVerifyCliTest(unittest.TestCase):
             def run_sql(self, sql: str) -> subprocess.CompletedProcess[str]:
                 return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="ok\n", stderr="")
 
-        with patch("datanexus.cli.OpenTenBaseRuntime", return_value=Runtime()):
-            code, output = self._run(["--root", str(self.root), "verify", "dnx_smoke_plugin"])
+        with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=Runtime()):
+            code, output = self._run(["--root", str(self.root), "verify", "pluginctl_smoke_plugin"])
 
         self.assertEqual(code, 0)
         self.assertIn("smoke verify passed", output)
 
     def test_verify_with_cluster_file_enters_distributed_verify(self) -> None:
-        with patch("datanexus.cli.PsqlCoordinatorExecutor", return_value=FakeSqlExecutor()):
-            with patch("datanexus.cli.ScpSshRemoteExecutor", return_value=FakeRemoteExecutor(self.root)):
-                code, output = self._run(["--root", str(self.root), "verify", "dnx_smoke_plugin", "-f", str(self.cluster_file)])
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=FakeSqlExecutor()):
+            with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=FakeRemoteExecutor(self.root)):
+                code, output = self._run(["--root", str(self.root), "verify", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
 
         self.assertEqual(code, 0)
         self.assertIn("Mode: distributed-verify", output)
@@ -230,9 +230,9 @@ class DistributedVerifyCliTest(unittest.TestCase):
         self.assertIn("Result: OK", output)
 
     def test_verify_json_shape_is_stable(self) -> None:
-        with patch("datanexus.cli.PsqlCoordinatorExecutor", return_value=FakeSqlExecutor()):
-            with patch("datanexus.cli.ScpSshRemoteExecutor", return_value=FakeRemoteExecutor(self.root)):
-                code, output = self._run(["--root", str(self.root), "verify", "dnx_smoke_plugin", "-f", str(self.cluster_file), "--json"])
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=FakeSqlExecutor()):
+            with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=FakeRemoteExecutor(self.root)):
+                code, output = self._run(["--root", str(self.root), "verify", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--json"])
 
         self.assertEqual(code, 0)
         payload = json.loads(output)

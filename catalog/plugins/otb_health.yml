@@ -1,4 +1,4 @@
-plugin_id: otb_health
+﻿plugin_id: otb_health
 name: OpenTenBase Health
 version: 1.0.0
 description: Data quality check and smart diagnostics SQL extension for OpenTenBase.
@@ -18,5 +18,5 @@ payload:
   smoke_sql: recipes/otb_health_smoke.sql
   installed_probe: SELECT otb_health.version();
 notes:
-  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Imported from the legacy OpenTenBase PluginCtl plugin payloads for governance validation.
   - Review SQL before deploy; no rollback_sql is declared yet.

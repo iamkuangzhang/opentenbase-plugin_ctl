@@ -1,4 +1,4 @@
-# M2 Governance Flow
+﻿# M2 Governance Flow
 
 ## Recommended Order
 
@@ -20,12 +20,12 @@ This order keeps the platform centered on plugin governance:
 
 ## Plugin Difference
 
-`dnx_smoke_plugin` is a controlled lifecycle fixture for platform validation.
+`pluginctl_smoke_plugin` is a controlled lifecycle fixture for platform validation.
 It is intentionally small, safe, and repeatable. Use it to validate the full
 governance flow without touching the real business plugin.
 
 `otb_timeseries` is the real OpenTenBase plugin payload. Its current state is
-useful for confirming that DataNexus can see an already installed plugin and
+useful for confirming that plugin_ctl can see an already installed plugin and
 track its governance status, but it should not be used as a destructive test
 target.
 

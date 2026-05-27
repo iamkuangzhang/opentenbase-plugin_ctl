@@ -1,11 +1,11 @@
-import tempfile
+﻿import tempfile
 import unittest
 from hashlib import sha256
 from pathlib import Path
 
-from datanexus.cluster import ClusterConfig, ClusterNode
-from datanexus.distribution import distribute_payload_to_nodes
-from datanexus.runtime.opentenbase import RemoteCommandResult
+from plugin_ctl.cluster import ClusterConfig, ClusterNode
+from plugin_ctl.distribution import distribute_payload_to_nodes
+from plugin_ctl.runtime.opentenbase import RemoteCommandResult
 
 
 class MockRemoteExecutor:

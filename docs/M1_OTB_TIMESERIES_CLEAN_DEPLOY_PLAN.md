@@ -1,4 +1,4 @@
-# M1 otb_timeseries Clean Deploy Plan
+﻿# M1 otb_timeseries Clean Deploy Plan
 
 ## Current Constraint
 
@@ -24,11 +24,11 @@ Use a clean temporary OpenTenBase environment when cluster bootstrap is
 repeatable:
 
 1. Start a fresh OpenTenBase Docker topology.
-2. Confirm `datanexus cluster status` is green.
+2. Confirm `plugin_ctl cluster status` is green.
 3. Confirm `SELECT otb_ts.version();` fails before deploy.
 4. Run `python -m plugin_ctl deploy otb_timeseries`.
 5. Run `python -m plugin_ctl verify otb_timeseries`.
-6. Preserve logs and `datanexus report --json`.
+6. Preserve logs and `plugin_ctl report --json`.
 7. Tear down the temporary environment.
 
 This is the strongest proof because it avoids residual objects from the current
@@ -52,7 +52,7 @@ Required checks before using this path:
 
 ## Current M1 Evidence
 
-M1 now proves the platform deploy chain through `dnx_smoke_plugin`:
+M1 now proves the platform deploy chain through `pluginctl_smoke_plugin`:
 
 - uninstalled deploy path
 - payload copy

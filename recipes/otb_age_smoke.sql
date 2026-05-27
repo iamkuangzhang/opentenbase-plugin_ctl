@@ -1,1 +1,1 @@
-SELECT otb_age.version();
+﻿SELECT otb_age.version();

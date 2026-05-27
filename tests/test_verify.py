@@ -1,9 +1,9 @@
-import subprocess
+﻿import subprocess
 import unittest
 from pathlib import Path
 
-from datanexus.catalog import Catalog
-from datanexus.verify import run_removed_verify, run_smoke_verify
+from plugin_ctl.catalog import Catalog
+from plugin_ctl.verify import run_removed_verify, run_smoke_verify
 
 
 class RemovedProbeRuntime:
@@ -29,7 +29,7 @@ class SmokeRuntime(RemovedProbeRuntime):
 class VerifyTest(unittest.TestCase):
     def load_smoke_manifest(self):
         root = Path(__file__).resolve().parents[1]
-        return Catalog(root=root).load_one("dnx_smoke_plugin")
+        return Catalog(root=root).load_one("pluginctl_smoke_plugin")
 
     def test_removed_verify_passes_when_probe_returns_removed(self) -> None:
         manifest = self.load_smoke_manifest()

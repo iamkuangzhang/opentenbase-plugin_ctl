@@ -1,10 +1,10 @@
-from pathlib import Path
+﻿from pathlib import Path
 import subprocess
 import unittest
 from typing import Any
 
-from datanexus.catalog import Catalog
-from datanexus.deploy import deploy_sql_payload
+from plugin_ctl.catalog import Catalog
+from plugin_ctl.deploy import deploy_sql_payload
 
 
 class UnreachableRuntime:
@@ -63,7 +63,7 @@ class DeployTest(unittest.TestCase):
 
     def load_smoke_manifest(self) -> Any:
         root = Path(__file__).resolve().parents[1]
-        return Catalog(root=root).load_one("dnx_smoke_plugin")
+        return Catalog(root=root).load_one("pluginctl_smoke_plugin")
 
     def test_deploy_stops_when_runtime_unreachable(self) -> None:
         manifest = self.load_manifest()
@@ -78,7 +78,7 @@ class DeployTest(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.detail, "already deployed: 1.0.0")
-        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT dnx_smoke_plugin.version();"])
+        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT pluginctl_smoke_plugin.version();"])
         self.assertEqual(runtime.exec_calls, [])
         self.assertEqual(runtime.copy_calls, [])
         self.assertEqual(runtime.sql_file_calls, [])
@@ -90,7 +90,7 @@ class DeployTest(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.detail, "deploy sql payload passed")
-        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT dnx_smoke_plugin.version();"])
+        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT pluginctl_smoke_plugin.version();"])
         self.assertEqual(len(runtime.exec_calls), 1)
         self.assertEqual(len(runtime.copy_calls), 1)
         self.assertEqual(runtime.copy_calls[0][0], manifest.source_root)
@@ -104,7 +104,7 @@ class DeployTest(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.metadata["stage"], "install")
-        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT dnx_smoke_plugin.version();"])
+        self.assertEqual(runtime.sql_calls, ["SELECT 1;", "SELECT pluginctl_smoke_plugin.version();"])
         self.assertEqual(len(runtime.exec_calls), 1)
         self.assertEqual(len(runtime.copy_calls), 1)
         self.assertEqual(runtime.copy_calls[0][0], manifest.source_root)

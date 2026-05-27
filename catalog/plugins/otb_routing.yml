@@ -1,4 +1,4 @@
-plugin_id: otb_routing
+﻿plugin_id: otb_routing
 name: OpenTenBase Routing
 version: 1.0.0
 description: Road network routing analysis extension compatible with pgRouting concepts.
@@ -20,5 +20,5 @@ payload:
   installed_probe: SELECT otb_routing.version();
   requires_build: true
 notes:
-  - Imported from the legacy DataNexus plugin payloads for governance validation.
+  - Imported from the legacy OpenTenBase PluginCtl plugin payloads for governance validation.
   - Do not deploy until native shared-library build/install is prepared.

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import io
 import json
@@ -9,11 +9,11 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from datanexus.activation import PsqlCoordinatorExecutor, execute_activation
-from datanexus.catalog import Catalog
-from datanexus.cli import main
-from datanexus.cluster import ClusterConfig, ClusterNode
-from datanexus.runtime.opentenbase import RemoteCommandResult
+from plugin_ctl.activation import PsqlCoordinatorExecutor, execute_activation
+from plugin_ctl.catalog import Catalog
+from plugin_ctl.cli import main
+from plugin_ctl.cluster import ClusterConfig, ClusterNode
+from plugin_ctl.runtime.opentenbase import RemoteCommandResult
 
 
 CLUSTER_TOML = """
@@ -85,7 +85,7 @@ class FakeCoordinatorExecutor:
 class ActivationTest(unittest.TestCase):
     def setUp(self) -> None:
         self.root = Path(__file__).resolve().parents[1]
-        self.manifest = Catalog(root=self.root).load_one("dnx_smoke_plugin")
+        self.manifest = Catalog(root=self.root).load_one("pluginctl_smoke_plugin")
         self.cluster = ClusterConfig(
             name="activation-test",
             nodes=(
@@ -181,8 +181,8 @@ class ActivationCliTest(unittest.TestCase):
         return code, output.getvalue()
 
     def test_activate_defaults_to_dry_run_without_executor(self) -> None:
-        with patch("datanexus.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("dry-run must not create psql executor")):
-            code, output = self._run(["--root", str(self.root), "activate", "dnx_smoke_plugin", "-f", str(self.cluster_file)])
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("dry-run must not create psql executor")):
+            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
 
         self.assertEqual(code, 0)
         self.assertIn("Mode: dry-run", output)
@@ -192,8 +192,8 @@ class ActivationCliTest(unittest.TestCase):
 
     def test_activate_execute_uses_executor(self) -> None:
         fake = FakeCoordinatorExecutor()
-        with patch("datanexus.cli.PsqlCoordinatorExecutor", return_value=fake):
-            code, output = self._run(["--root", str(self.root), "activate", "dnx_smoke_plugin", "-f", str(self.cluster_file), "--execute"])
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=fake):
+            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute"])
 
         self.assertEqual(code, 0)
         self.assertIn("Mode: execute", output)
@@ -204,17 +204,17 @@ class ActivationCliTest(unittest.TestCase):
     def test_activate_rejects_dry_run_and_execute_together(self) -> None:
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
-                main(["activate", "dnx_smoke_plugin", "-f", str(self.cluster_file), "--dry-run", "--execute"])
+                main(["activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run", "--execute"])
 
     def test_activate_execute_json_shape_is_stable(self) -> None:
-        with patch("datanexus.cli.PsqlCoordinatorExecutor", return_value=FakeCoordinatorExecutor()):
-            code, output = self._run(["--root", str(self.root), "activate", "dnx_smoke_plugin", "-f", str(self.cluster_file), "--execute", "--json"])
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=FakeCoordinatorExecutor()):
+            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute", "--json"])
 
         self.assertEqual(code, 0)
         payload = json.loads(output)
         self.assertEqual(payload["cluster"], "activation-test")
-        self.assertEqual(payload["plugin_id"], "dnx_smoke_plugin")
-        self.assertEqual(payload["extension_name"], "dnx_smoke_plugin")
+        self.assertEqual(payload["plugin_id"], "pluginctl_smoke_plugin")
+        self.assertEqual(payload["extension_name"], "pluginctl_smoke_plugin")
         self.assertEqual(payload["mode"], "execute")
         self.assertEqual(payload["physical_distribution"], "not_executed")
         self.assertEqual(payload["datanodes"], "not_connected")

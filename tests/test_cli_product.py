@@ -1,7 +1,7 @@
-from pathlib import Path
+﻿from pathlib import Path
 import unittest
 
-from datanexus.cli import build_parser
+from plugin_ctl.cli import build_parser
 
 
 class CliProductTest(unittest.TestCase):
@@ -19,10 +19,9 @@ class CliProductTest(unittest.TestCase):
 
         self.assertIn('name = "opentenbase-plugin_ctl"', pyproject)
         self.assertIn('requires-python = ">=3.11"', pyproject)
-        self.assertIn('plugin_ctl = "datanexus.cli:main"', pyproject)
-        self.assertIn('opentenbase-pluginctl = "datanexus.cli:main"', pyproject)
-        self.assertIn('opentenbase-plugin_ctl = "datanexus.cli:main"', pyproject)
-        self.assertIn('datanexus = "datanexus.cli:main"', pyproject)
+        self.assertIn('plugin_ctl = "plugin_ctl.cli:main"', pyproject)
+        self.assertIn('opentenbase-pluginctl = "plugin_ctl.cli:main"', pyproject)
+        self.assertIn('opentenbase-plugin_ctl = "plugin_ctl.cli:main"', pyproject)
 
 
 if __name__ == "__main__":

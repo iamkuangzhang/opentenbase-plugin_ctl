@@ -1,1 +1,1 @@
-SELECT otb_scheduler.version();
+﻿SELECT otb_scheduler.version();

@@ -1,4 +1,4 @@
-# v0.1.0 Release Checklist
+﻿# v0.1.0 Release Checklist
 
 ## Documentation
 
@@ -7,7 +7,7 @@
 - [x] README includes a five-minute trial flow.
 - [x] README documents safety boundaries.
 - [x] M4 release-quality documentation exists.
-- [x] `dnx_smoke_plugin` is documented as a bundled sample plugin.
+- [x] `pluginctl_smoke_plugin` is documented as a bundled sample plugin.
 - [x] `otb_timeseries` is documented as a reference manifest, not a complete bundled package.
 - [x] Known limitations are documented.
 
@@ -17,18 +17,18 @@
 - [x] Runtime dependency `PyYAML>=6.0` is declared.
 - [x] Editable install works with `python -m pip install -e .`.
 - [x] Console script `plugin_ctl` is declared.
-- [x] Compatibility script `datanexus` is retained.
+- [x] Project-name aliases `opentenbase-pluginctl` and `opentenbase-plugin_ctl` are retained.
 - [x] `python -m plugin_ctl` remains supported.
 
 ## Packaging Strategy
 
-- [x] Python package code is included through `src/datanexus`.
+- [x] Python package code is included through `src/plugin_ctl`.
 - [x] Source release includes `catalog/`.
 - [x] Source release includes `examples/`.
 - [x] Source release includes `docs/`.
 - [x] Source release includes `recipes/`.
 - [x] Source release includes `tests/`.
-- [x] `.datanexus/` is ignored and excluded from source manifest.
+- [x] `.plugin_ctl/` is ignored and excluded from source manifest.
 
 Decision for v0.1.0:
 
@@ -55,7 +55,7 @@ The CLI currently resolves platform assets from the source-tree root. A wheel in
 - [x] `CONTRIBUTING.md` exists.
 - [x] `SECURITY.md` exists.
 - [x] README does not include old competition/private material.
-- [x] `.datanexus/state.json` and `.datanexus/archive.json` are ignored.
+- [x] `.plugin_ctl/state.json` and `.plugin_ctl/archive.json` are ignored.
 - [x] Sensitive keyword scan completed. The only match is `SECURITY.md` explaining not to publish passwords/tokens; no actual credential was found.
 
 ## Validation Commands
@@ -66,24 +66,24 @@ Run before tagging:
 python -m unittest discover -s tests -v
 python -m plugin_ctl list
 plugin_ctl list
-python -m plugin_ctl plugin diagnose dnx_smoke_plugin
-python -m plugin_ctl plugin consistency dnx_smoke_plugin
+python -m plugin_ctl plugin diagnose pluginctl_smoke_plugin
+python -m plugin_ctl plugin consistency pluginctl_smoke_plugin
 python -m plugin_ctl plugins status
 ```
 
 If local OpenTenBase is available, optionally run:
 
 ```bash
-python -m plugin_ctl plugin precheck dnx_smoke_plugin
-python -m plugin_ctl deploy dnx_smoke_plugin
-python -m plugin_ctl verify dnx_smoke_plugin
-python -m plugin_ctl rollback dnx_smoke_plugin
-python -m plugin_ctl rollback dnx_smoke_plugin --execute
-python -m plugin_ctl verify dnx_smoke_plugin --removed
+python -m plugin_ctl plugin precheck pluginctl_smoke_plugin
+python -m plugin_ctl deploy pluginctl_smoke_plugin
+python -m plugin_ctl verify pluginctl_smoke_plugin
+python -m plugin_ctl rollback pluginctl_smoke_plugin
+python -m plugin_ctl rollback pluginctl_smoke_plugin --execute
+python -m plugin_ctl verify pluginctl_smoke_plugin --removed
 python -m plugin_ctl report
 ```
 
-Latest local validation also completed the `dnx_smoke_plugin` deploy, verify, rollback dry-run, rollback execute, removed verify, and report flow.
+Latest local validation also completed the `pluginctl_smoke_plugin` deploy, verify, rollback dry-run, rollback execute, removed verify, and report flow.
 
 ## Release Decision
 
