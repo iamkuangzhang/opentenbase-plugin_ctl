@@ -2,255 +2,212 @@
 
 [English](README.md) | [简体中文](README_zh.md)
 
-OpenTenBase PluginCtl 是一个面向 OpenTenBase 插件的命令行工具，用于管理插件在本地 Docker 沙盒和分布式 OpenTenBase 集群中的生命周期。
+OpenTenBase PluginCtl 是一个面向 OpenTenBase 的分布式插件生命周期管理工具。
 
-它关注的是插件交付与治理，而不是泛数据库运维：
+它的重点不是做通用数据库运维平台，也不是 Web 控制台或插件市场，而是帮助用户把 PostgreSQL / OpenTenBase 插件从“有一堆文件和 SQL”推进到“可检查、可规划、可部署、可注册、可验证、可追踪”的工程化插件包。
 
-- 插件包检查
-- 部署计划生成
-- 物理载荷分发
-- Coordinator 侧扩展激活
-- 分布式白盒验证
-- 本地生命周期报告
+当前版本定位：`v0.1.0` source release。它已经可以作为 CLI 工具试用，但仍属于早期版本，不建议直接当作生产环境自动化发布系统。
 
-它不是 OpenTenBase 运维平台，不是 Web 控制台，也不是插件市场。
+## 它能做什么
 
-## 当前状态
+- 发现和查看插件 manifest。
+- 静态扫描 PostgreSQL 插件源码，评估迁移到 OpenTenBase 的分布式风险。
+- 检查插件包结构是否合格。
+- 生成部署、验证、回滚计划。
+- 对本地 OpenTenBase Docker / Linux 环境执行安全样例插件的 deploy / verify / rollback。
+- 在分布式拓扑下分发插件物理文件。
+- 只在第一个，也就是 primary coordinator 上执行一次扩展注册，然后只读验证其他 coordinator 的扩展视图。
+- 做分布式白盒验证，包括 CN/DN 连接、扩展版本、payload 文件 checksum、prepared transaction 残留等。
+- 记录插件 action state、archive、report。
+- 按 coordinator / datanode / all 角色展示插件治理计划。
 
-当前仓库是一个源码发布基线。它已经可以作为 CLI 项目使用，但仍应视为早期工具。
+## 它不是什么
 
-当前主要验证流程是：
+PluginCtl 当前不是：
 
-```bash
-python -m plugin_ctl check <plugin_id>
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl activate <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl verify <plugin_id> -f cluster.toml
-python -m plugin_ctl report
-```
-
-本地 Docker 沙盒流程仍然保留：
-
-```bash
-python -m plugin_ctl deploy <plugin_id>
-python -m plugin_ctl verify <plugin_id>
-python -m plugin_ctl rollback <plugin_id>
-python -m plugin_ctl report
-```
+- OpenTenBase 集群运维平台
+- Web UI
+- 插件市场
+- 多数据库适配层
+- 批量部署和自动升级系统
+- 自动修复工具
+- 生产级回滚系统
 
 ## 安装
 
 环境要求：
 
 - Python 3.11+
-- `pip`
-- Docker，仅本地 OpenTenBase 沙盒流程需要
-- `ssh`、`scp`、`psql`，仅分布式集群流程需要
+- pip
+- Docker，可选，仅用于本地 OpenTenBase 沙箱流程
+- `psql`、`ssh`、`scp`，可选，仅用于分布式集群流程
 
 从源码安装：
 
 ```bash
-git clone https://github.com/iamkuangzhang/opentenbase-plugin_ctl.git
-cd opentenbase-plugin_ctl
+git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
+cd opentenbase-pluginctl
 python -m pip install -e .
 ```
 
-验证命令行工具：
+验证命令是否可用：
 
 ```bash
-plugin_ctl list
-python -m plugin_ctl list
+opentenbase-pluginctl list
 ```
 
-## 快速开始
+推荐使用 `opentenbase-pluginctl`。`python -m plugin_ctl` 保留给开发和调试使用。
 
-查看已声明的插件：
+## 5 分钟试用
+
+内置的 `pluginctl_smoke_plugin` 是一个安全样例插件，用来验证 PluginCtl 自己的生命周期能力。建议先用它试，不要一开始就拿真实业务插件做破坏性实验。
+
+主流程：
 
 ```bash
-python -m plugin_ctl list
+opentenbase-pluginctl list
+opentenbase-pluginctl inspect pluginctl_smoke_plugin
+opentenbase-pluginctl check pluginctl_smoke_plugin
+opentenbase-pluginctl deploy pluginctl_smoke_plugin
+opentenbase-pluginctl verify pluginctl_smoke_plugin
+opentenbase-pluginctl report
 ```
 
-查看某个插件的 manifest：
+更细的治理命令，例如 `plugin lint`、`plugin plan`、`plugin precheck`、`plugin diagnose`，可以在需要排查问题时单独运行。
+
+如果要执行回滚，必须显式加 `--execute`：
 
 ```bash
-python -m plugin_ctl inspect pluginctl_smoke_plugin
+opentenbase-pluginctl rollback pluginctl_smoke_plugin
+opentenbase-pluginctl rollback pluginctl_smoke_plugin --execute
+opentenbase-pluginctl verify pluginctl_smoke_plugin --removed
 ```
 
-运行不依赖 Docker 或真实数据库的插件包检查：
+## 分布式插件包流程
 
-```bash
-python -m plugin_ctl plugin lint pluginctl_smoke_plugin
-python -m plugin_ctl plugin plan pluginctl_smoke_plugin
-```
-
-查看本地 action 报告：
-
-```bash
-python -m plugin_ctl report
-```
-
-## 分布式集群流程
-
-复制集群拓扑样例并按实际环境修改：
-
-```powershell
-copy cluster.toml.example cluster.toml
-```
-
-Linux/macOS：
+先复制并修改拓扑文件：
 
 ```bash
 cp cluster.toml.example cluster.toml
 ```
 
-检查集群拓扑：
+Windows PowerShell：
+
+```powershell
+Copy-Item cluster.toml.example cluster.toml
+```
+
+检查拓扑：
 
 ```bash
-python -m plugin_ctl cluster inspect -f cluster.toml
+opentenbase-pluginctl cluster inspect -f cluster.toml
 ```
 
-预览物理分发计划：
+推荐的完整分布式流程：
 
 ```bash
-python -m plugin_ctl deploy pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl assess ./pg_extension_source/
+opentenbase-pluginctl check pluginctl_smoke_plugin
+opentenbase-pluginctl deploy pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl deploy pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl register pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl register pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl verify pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl plugin consistency pluginctl_smoke_plugin
+opentenbase-pluginctl report
 ```
 
-执行物理分发：
+这里有三个重要边界：
+
+- `deploy -f cluster.toml` 默认 dry-run，只展示物理文件分发计划。
+- `deploy -f cluster.toml --execute` 只分发文件，不执行 `CREATE EXTENSION`。
+- `register -f cluster.toml --execute` 只在 `cluster.toml` 中第一个 coordinator 上执行一次 `CREATE EXTENSION`，然后只读检查其他 coordinator 的 `pg_extension` 视图。
+
+`activate` 只是 `register` 的旧兼容别名，已经降级，不建议继续使用。
+
+## 常用命令
+
+### 插件发现
 
 ```bash
-python -m plugin_ctl deploy pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl list
+opentenbase-pluginctl inspect <plugin_id>
 ```
 
-在 Coordinator 上激活扩展：
+### 源码迁移风险评估
 
 ```bash
-python -m plugin_ctl activate pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl assess <pg_extension_source_path>
+opentenbase-pluginctl assess <pg_extension_source_path> --json
 ```
 
-执行分布式白盒验证：
+`assess` 不编译代码、不连接数据库、不修改文件。它会静态检查：
+
+- 是否存在 `.control` 文件
+- 是否存在 SQL 安装或升级文件
+- `LANGUAGE C` 函数是否显式声明 `SHIPPABLE` 或 `NOT SHIPPABLE`
+- C 代码里是否存在 `SPI_execute` 风格的动态建表 DDL
+- 事务控制、系统 catalog 访问等需要分布式审查的风险点
+
+### 插件治理
 
 ```bash
-python -m plugin_ctl verify pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl check <plugin_id>
+opentenbase-pluginctl plugin lint <plugin_id>
+opentenbase-pluginctl plugin plan <plugin_id>
+opentenbase-pluginctl plugin precheck <plugin_id>
+opentenbase-pluginctl plugin diagnose <plugin_id>
+opentenbase-pluginctl plugin status <plugin_id>
+opentenbase-pluginctl plugins status
 ```
 
-JSON 输出适合自动化集成：
+### 生命周期
 
 ```bash
-python -m plugin_ctl verify pluginctl_smoke_plugin -f cluster.toml --json
-python -m plugin_ctl report --json
+opentenbase-pluginctl deploy <plugin_id>
+opentenbase-pluginctl verify <plugin_id>
+opentenbase-pluginctl rollback <plugin_id>
+opentenbase-pluginctl rollback <plugin_id> --execute
+opentenbase-pluginctl verify <plugin_id> --removed
 ```
 
-## 主命令说明
-
-### `check`
+### 分布式插件治理
 
 ```bash
-python -m plugin_ctl check <plugin_id>
+opentenbase-pluginctl cluster inspect -f cluster.toml
+opentenbase-pluginctl deploy <plugin_id> -f cluster.toml
+opentenbase-pluginctl deploy <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl register <plugin_id> -f cluster.toml
+opentenbase-pluginctl register <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl verify <plugin_id> -f cluster.toml
+opentenbase-pluginctl plugin roles <plugin_id>
+opentenbase-pluginctl plugin consistency <plugin_id>
+opentenbase-pluginctl cluster distribute <plugin_id> -f cluster.toml --dry-run
+opentenbase-pluginctl cluster distribute <plugin_id> -f cluster.toml --execute
 ```
 
-执行聚合治理检查，内部组合了插件包 lint、生命周期 plan、部署前 precheck 和 diagnose。
-
-它不会修改数据库，也不会写远端文件系统。但它可能会检查本地 runtime，因此 Docker 或 OpenTenBase 未运行时会报告环境失败。
-
-### `deploy`
-
-本地 Docker 沙盒模式：
+### 归档和报告
 
 ```bash
-python -m plugin_ctl deploy <plugin_id>
+opentenbase-pluginctl plugin archive list
+opentenbase-pluginctl plugin archive inspect <plugin_id>
+opentenbase-pluginctl state <plugin_id>
+opentenbase-pluginctl report
+opentenbase-pluginctl report --json
 ```
 
-分布式物理分发模式：
+### 运行时检查
 
 ```bash
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl doctor
+opentenbase-pluginctl cluster status
 ```
 
-带 `-f cluster.toml` 时，`deploy` 只代表物理文件分发：
-
-- `.so` 文件复制到每个节点的 `lib_dir`
-- `.control` 和 `.sql` 文件复制到每个节点的 `extension_dir`
-- 复制后读取远端 SHA256 并与本地文件对账
-- 不执行 `CREATE EXTENSION`
-
-不传 `--execute` 时，命令只生成 dry-run 计划。
-
-### `activate`
-
-```bash
-python -m plugin_ctl activate <plugin_id> -f cluster.toml
-python -m plugin_ctl activate <plugin_id> -f cluster.toml --execute
-```
-
-在 Coordinator 节点上激活扩展元数据。
-
-传入 `--execute` 后，会按 Coordinator 顺序串行执行：
-
-```sql
-CREATE EXTENSION IF NOT EXISTS <extension_name>;
-```
-
-随后会检查所有 Coordinator 上的扩展版本是否一致。
-
-该命令不复制文件，也不连接 Datanode。
-
-### `verify`
-
-本地 smoke 验证：
-
-```bash
-python -m plugin_ctl verify <plugin_id>
-```
-
-分布式白盒验证：
-
-```bash
-python -m plugin_ctl verify <plugin_id> -f cluster.toml
-```
-
-分布式验证是只读的，会检查：
-
-- Coordinator 上 extension 是否安装、版本是否一致
-- CN/DN SQL 连通性
-- CN/DN 上物理 payload 文件的 SHA256
-- `pg_prepared_xacts` 中是否存在 prepared transaction 残留
-
-### `report`
-
-```bash
-python -m plugin_ctl report
-python -m plugin_ctl report --json
-```
-
-展示 PluginCtl 写入的本地 action 记录。它适合做 CLI 审计记录，但不能替代真实数据库状态验证。
-
-## 高级命令
-
-以下命令用于排查问题和底层检查。普通用户优先使用主流程命令。
-
-```bash
-python -m plugin_ctl plugin lint <plugin_id>
-python -m plugin_ctl plugin plan <plugin_id>
-python -m plugin_ctl plugin precheck <plugin_id>
-python -m plugin_ctl plugin diagnose <plugin_id>
-python -m plugin_ctl plugin status <plugin_id>
-python -m plugin_ctl plugin roles <plugin_id>
-python -m plugin_ctl plugin consistency <plugin_id>
-python -m plugin_ctl plugin archive list
-python -m plugin_ctl plugin archive inspect <plugin_id>
-python -m plugin_ctl plugins status
-python -m plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
-python -m plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>
-python -m plugin_ctl cluster status
-python -m plugin_ctl doctor
-```
+这些命令只作为插件管理的支撑，不是为了把 PluginCtl 做成泛集群巡检平台。
 
 ## 插件包结构
 
-插件由 manifest 和 payload 文件组成。
-
-示例：
+样例插件目录：
 
 ```text
 examples/plugins/pluginctl_smoke_plugin/
@@ -267,66 +224,83 @@ examples/plugins/pluginctl_smoke_plugin/
       postuninstall.sql
 ```
 
-manifest 负责声明：
+manifest 通常声明：
 
-- 插件 ID 和版本
-- 目标数据库
-- payload 根目录
-- install、verify、smoke、rollback SQL
-- installed 和 removed probe
-- 分布式角色要求
-- 可选生命周期 hooks
-
-## 仓库结构
-
-```text
-catalog/plugins/       插件 payload 的 reference manifests
-examples/plugins/      内置示例插件和 legacy payload fixtures
-recipes/               smoke 验证 SQL
-src/plugin_ctl/        Python 包实现
-tests/                 单元测试
-docs/                  设计与状态文档
-cluster.toml.example   分布式集群拓扑样例
-```
+- `plugin_id`
+- `name`
+- `version`
+- `database`
+- `targets`
+- `payload`
+- `install_sql`
+- `verify_sql`
+- `rollback_sql`
+- `installed_probe`
+- `removed_probe`
+- `distributed`
+- 可选 role hooks
 
 ## 内置插件
 
 ### `pluginctl_smoke_plugin`
 
-一个小型示例插件，用于验证 PluginCtl 自身能力。它支持 deploy、verify、rollback 和 removed verification。
+安全样例插件，用于验证 PluginCtl 的 deploy / verify / rollback / removed verify / archive / consistency 流程。
 
-第一次测试工具时建议先使用它。
+这是推荐的入门测试插件。
 
 ### `otb_timeseries`
 
-真实 OpenTenBase 时序插件的 reference manifest。它适合用于治理视角和已安装状态检查，但当前发布仓库不应被视为该插件完整干净安装链路的证明。
+真实 OpenTenBase 时序插件的 reference manifest。它用于展示真实业务插件的治理和状态检查，但当前发布仓库不把它声明为完整 bundled package。
+
+注意：不要对 `otb_timeseries` 执行破坏性 rollback。
+
+## 仓库结构
+
+```text
+catalog/plugins/       reference manifests
+examples/plugins/      bundled sample plugins and fixtures
+recipes/               smoke verification SQL
+src/plugin_ctl/        Python implementation
+tests/                 unit tests
+docs/                  design and release documents
+cluster.toml.example   distributed topology example
+```
 
 ## 安全边界
 
-重要假设：
+只读或近似只读命令：
 
-- `cluster.toml` 是可信管理员配置。
-- PluginCtl 不把拓扑文件当作未可信输入处理。
-- `deploy -f --execute` 会通过 `scp` 写远端 payload 文件。
-- `activate -f --execute` 会通过 `CREATE EXTENSION` 修改 Coordinator 元数据。
-- `verify -f` 是只读验证。
-- rollback 是 best-effort，且必须显式传入 `--execute` 才会执行。
+- `list`
+- `inspect`
+- `assess`
+- `plugin lint`
+- `plugin plan`
+- `plugin precheck`
+- `plugin diagnose`
+- `plugin roles`
+- `plugin consistency`
+- `plugin archive list`
+- `plugin archive inspect`
+- `plugins status`
+- `verify -f`
+- `report`
 
-实现层面的安全边界：
+会修改数据库或文件系统的命令：
 
-- `psql`、`ssh`、`scp`、`docker` 都使用参数列表调用。
-- 不使用 `shell=True`。
-- extension name 会经过 PostgreSQL identifier 校验后再生成 SQL。
-- 不自动创建远端系统目录。
-- 不自动使用 `sudo`。
+- `deploy <plugin_id>`：本地模式会执行安装 SQL。
+- `deploy <plugin_id> -f cluster.toml --execute`：会通过 `scp` 分发远程文件。
+- `register <plugin_id> -f cluster.toml --execute`：只在第一个，也就是 primary coordinator 上执行一次 `CREATE EXTENSION`。
+- `rollback <plugin_id> --execute`：会执行 manifest 声明的 `rollback_sql`。
+
+当前 role hooks 只进入 plan / roles / diagnose，不会自动执行。未来如果支持执行 hook，也必须要求显式参数，例如 `--execute-hooks`。
 
 ## 当前不做
 
 PluginCtl 当前不实现：
 
 - 自动编译插件源码
-- 自动修复远端节点状态
-- 自动 rollback Coordinator 激活
+- 自动修复远程节点状态
+- 自动 rollback coordinator 注册
 - Web UI
 - 插件市场
 - 批量部署和批量升级编排
@@ -341,7 +315,7 @@ PluginCtl 当前不实现：
 python -m unittest discover -s tests -v
 ```
 
-检查空白字符问题：
+检查空白错误：
 
 ```bash
 git diff --check
@@ -350,7 +324,7 @@ git diff --check
 当前测试基线：
 
 ```text
-109 unit tests
+120 tests
 ```
 
 ## 文档

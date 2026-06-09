@@ -1,286 +1,525 @@
 # OpenTenBase PluginCtl
 
-[English](README.md) | [简体中文](README_zh.md)
+[简体中文](#简体中文) | [English](#english)
 
-OpenTenBase PluginCtl is a CLI tool for managing the lifecycle of OpenTenBase plugins in both local Docker sandboxes and distributed OpenTenBase clusters.
+## 简体中文
 
-It focuses on plugin delivery and governance:
+OpenTenBase PluginCtl 是一个面向 OpenTenBase 的分布式插件生命周期管理工具。
 
-- package inspection
-- PostgreSQL extension source risk assessment
-- deployment planning
-- physical payload distribution
-- primary-coordinator extension registration
-- distributed white-box verification
-- local lifecycle reporting
+它的重点不是做通用数据库运维平台，也不是 Web 控制台或插件市场，而是帮助用户把 PostgreSQL / OpenTenBase 插件从“有一堆文件和 SQL”推进到“可检查、可规划、可部署、可注册、可验证、可追踪”的工程化插件包。
 
-It is not a general OpenTenBase operations platform, a Web console, or a plugin marketplace.
+当前版本定位：`v0.1.0` source release。它已经可以作为 CLI 工具试用，但仍属于早期版本，不建议直接当作生产环境自动化发布系统。
 
-## Current Status
+### 它能做什么
 
-This repository is currently a source-release baseline. It is usable as a CLI project, but it should still be treated as an early-stage tool.
+- 发现和查看插件 manifest。
+- 静态扫描 PostgreSQL 插件源码，评估迁移到 OpenTenBase 的分布式风险。
+- 检查插件包结构是否合格。
+- 生成部署、验证、回滚计划。
+- 对本地 OpenTenBase Docker / Linux 环境执行安全样例插件的 deploy / verify / rollback。
+- 在分布式拓扑下分发插件物理文件。
+- 只在 primary coordinator 上执行一次扩展注册，然后只读验证其他 coordinator 的扩展视图。
+- 做分布式白盒验证，包括 CN/DN 连接、扩展版本、payload 文件 checksum、prepared transaction 残留等。
+- 记录插件 action state、archive、report。
+- 按 coordinator / datanode / all 角色展示插件治理计划。
 
-The main tested flow is:
+### 它不是什么
+
+PluginCtl 当前不是：
+
+- OpenTenBase 集群运维平台
+- Web UI
+- 插件市场
+- 多数据库适配层
+- 批量部署和自动升级系统
+- 自动修复工具
+- 生产级回滚系统
+
+### 安装
+
+环境要求：
+
+- Python 3.11+
+- pip
+- Docker，可选，仅用于本地 OpenTenBase 沙箱流程
+- `psql`、`ssh`、`scp`，可选，仅用于分布式集群流程
+
+从源码安装：
 
 ```bash
-python -m plugin_ctl assess ./pg_extension_source/
-python -m plugin_ctl check <plugin_id>
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl register <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl verify <plugin_id> -f cluster.toml
-python -m plugin_ctl report
+git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
+cd opentenbase-pluginctl
+python -m pip install -e .
 ```
 
-For local development, the original Docker-based flow is still available:
+验证命令是否可用：
 
 ```bash
-python -m plugin_ctl deploy <plugin_id>
-python -m plugin_ctl verify <plugin_id>
-python -m plugin_ctl rollback <plugin_id>
-python -m plugin_ctl report
+opentenbase-pluginctl list
 ```
 
-## Installation
+推荐使用 `opentenbase-pluginctl`。`python -m plugin_ctl` 保留给开发和调试使用。
+
+### 5 分钟试用
+
+内置的 `pluginctl_smoke_plugin` 是一个安全样例插件，用来验证 PluginCtl 自己的生命周期能力。建议先用它试，不要一开始就拿真实业务插件做破坏性实验。
+
+```bash
+opentenbase-pluginctl list
+opentenbase-pluginctl inspect pluginctl_smoke_plugin
+opentenbase-pluginctl check pluginctl_smoke_plugin
+opentenbase-pluginctl deploy pluginctl_smoke_plugin
+opentenbase-pluginctl verify pluginctl_smoke_plugin
+opentenbase-pluginctl report
+```
+
+更细的治理命令，例如 `plugin lint`、`plugin plan`、`plugin precheck`、`plugin diagnose`，可以在需要排查问题时单独运行。
+
+如果要执行回滚，必须显式加 `--execute`：
+
+```bash
+opentenbase-pluginctl rollback pluginctl_smoke_plugin
+opentenbase-pluginctl rollback pluginctl_smoke_plugin --execute
+opentenbase-pluginctl verify pluginctl_smoke_plugin --removed
+```
+
+### 分布式插件包流程
+
+先复制并修改拓扑文件：
+
+```bash
+cp cluster.toml.example cluster.toml
+```
+
+Windows PowerShell：
+
+```powershell
+Copy-Item cluster.toml.example cluster.toml
+```
+
+检查拓扑：
+
+```bash
+opentenbase-pluginctl cluster inspect -f cluster.toml
+```
+
+推荐的完整分布式流程：
+
+```bash
+opentenbase-pluginctl assess ./pg_extension_source/
+opentenbase-pluginctl check pluginctl_smoke_plugin
+opentenbase-pluginctl deploy pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl deploy pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl register pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl register pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl verify pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl plugin consistency pluginctl_smoke_plugin
+opentenbase-pluginctl report
+```
+
+这里有三个重要边界：
+
+- `deploy -f cluster.toml` 默认 dry-run，只展示物理文件分发计划。
+- `deploy -f cluster.toml --execute` 只分发文件，不执行 `CREATE EXTENSION`。
+- `register -f cluster.toml --execute` 只在 `cluster.toml` 中第一个 coordinator 上执行一次 `CREATE EXTENSION`，然后只读检查其他 coordinator 的 `pg_extension` 视图。
+
+### 常用命令
+
+#### 插件发现
+
+```bash
+opentenbase-pluginctl list
+opentenbase-pluginctl inspect <plugin_id>
+```
+
+#### 源码迁移风险评估
+
+```bash
+opentenbase-pluginctl assess <pg_extension_source_path>
+opentenbase-pluginctl assess <pg_extension_source_path> --json
+```
+
+`assess` 不编译代码、不连接数据库、不修改文件。它会静态检查：
+
+- 是否存在 `.control` 文件
+- 是否存在 SQL 安装或升级文件
+- `LANGUAGE C` 函数是否显式声明 `SHIPPABLE` 或 `NOT SHIPPABLE`
+- C 代码里是否存在 `SPI_execute` 风格的动态建表 DDL
+- 事务控制、系统 catalog 访问等需要分布式审查的风险点
+
+#### 插件治理
+
+```bash
+opentenbase-pluginctl check <plugin_id>
+opentenbase-pluginctl plugin lint <plugin_id>
+opentenbase-pluginctl plugin plan <plugin_id>
+opentenbase-pluginctl plugin precheck <plugin_id>
+opentenbase-pluginctl plugin diagnose <plugin_id>
+opentenbase-pluginctl plugin status <plugin_id>
+opentenbase-pluginctl plugins status
+```
+
+#### 生命周期
+
+```bash
+opentenbase-pluginctl deploy <plugin_id>
+opentenbase-pluginctl verify <plugin_id>
+opentenbase-pluginctl rollback <plugin_id>
+opentenbase-pluginctl rollback <plugin_id> --execute
+opentenbase-pluginctl verify <plugin_id> --removed
+```
+
+#### 分布式插件治理
+
+```bash
+opentenbase-pluginctl cluster inspect -f cluster.toml
+opentenbase-pluginctl deploy <plugin_id> -f cluster.toml
+opentenbase-pluginctl deploy <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl register <plugin_id> -f cluster.toml
+opentenbase-pluginctl register <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl verify <plugin_id> -f cluster.toml
+opentenbase-pluginctl plugin roles <plugin_id>
+opentenbase-pluginctl plugin consistency <plugin_id>
+```
+
+#### 归档和报告
+
+```bash
+opentenbase-pluginctl plugin archive list
+opentenbase-pluginctl plugin archive inspect <plugin_id>
+opentenbase-pluginctl state <plugin_id>
+opentenbase-pluginctl report
+opentenbase-pluginctl report --json
+```
+
+#### 运行时检查
+
+```bash
+opentenbase-pluginctl doctor
+opentenbase-pluginctl cluster status
+```
+
+这些命令只作为插件管理的支撑，不是为了把 PluginCtl 做成泛集群巡检平台。
+
+### 插件包结构
+
+样例插件目录：
+
+```text
+examples/plugins/pluginctl_smoke_plugin/
+  manifest.yml
+  payload/
+    sql/
+      install.sql
+      verify.sql
+      rollback.sql
+    hooks/
+      preinstall.sql
+      postinstall.sql
+      preuninstall.sql
+      postuninstall.sql
+```
+
+manifest 通常声明：
+
+- `plugin_id`
+- `name`
+- `version`
+- `database`
+- `targets`
+- `payload`
+- `install_sql`
+- `verify_sql`
+- `rollback_sql`
+- `installed_probe`
+- `removed_probe`
+- `distributed`
+- 可选 role hooks
+
+### 内置插件
+
+#### `pluginctl_smoke_plugin`
+
+安全样例插件，用于验证 PluginCtl 的 deploy / verify / rollback / removed verify / archive / consistency 流程。
+
+这是推荐的入门测试插件。
+
+#### `otb_timeseries`
+
+真实 OpenTenBase 时序插件的 reference manifest。它用于展示真实业务插件的治理和状态检查，但当前发布仓库不把它声明为完整 bundled package。
+
+注意：不要对 `otb_timeseries` 执行破坏性 rollback。
+
+### 仓库结构
+
+```text
+catalog/plugins/       reference manifests
+examples/plugins/      bundled sample plugins and fixtures
+recipes/               smoke verification SQL
+src/plugin_ctl/        Python implementation
+tests/                 unit tests
+docs/                  design and release documents
+cluster.toml.example   distributed topology example
+```
+
+### 安全边界
+
+只读或近似只读命令：
+
+- `list`
+- `inspect`
+- `assess`
+- `plugin lint`
+- `plugin plan`
+- `plugin precheck`
+- `plugin diagnose`
+- `plugin roles`
+- `plugin consistency`
+- `plugin archive list`
+- `plugin archive inspect`
+- `plugins status`
+- `verify -f`
+- `report`
+
+会修改数据库或文件系统的命令：
+
+- `deploy <plugin_id>`：本地模式会执行安装 SQL。
+- `deploy <plugin_id> -f cluster.toml --execute`：会通过 `scp` 分发远程文件。
+- `register <plugin_id> -f cluster.toml --execute`：会在 primary coordinator 上执行 `CREATE EXTENSION`。
+- `rollback <plugin_id> --execute`：会执行 manifest 声明的 `rollback_sql`。
+
+当前 role hooks 只进入 plan / roles / diagnose，不会自动执行。未来如果支持执行 hook，也必须要求显式参数，例如 `--execute-hooks`。
+
+### 开发
+
+运行测试：
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+检查空白错误：
+
+```bash
+git diff --check
+```
+
+当前测试基线：
+
+```text
+120 tests
+```
+
+### 文档
+
+- [M3 Distributed Lifecycle](docs/M3_DISTRIBUTED_LIFECYCLE.md)
+- [M3 Final Status](docs/M3_FINAL_STATUS.md)
+- [M3 Archive And Consistency](docs/M3_ARCHIVE_AND_CONSISTENCY.md)
+- [M2 Plugin Governance](docs/M2_PLUGIN_GOVERNANCE.md)
+- [Release Checklist](docs/RELEASE_CHECKLIST.md)
+
+---
+
+## English
+
+OpenTenBase PluginCtl is a CLI tool for distributed plugin lifecycle governance on OpenTenBase.
+
+It is not a general-purpose OpenTenBase operations platform, a Web console, or a plugin marketplace. Its purpose is to turn PostgreSQL / OpenTenBase plugin payloads into packages that can be inspected, planned, deployed, registered, verified, archived, and audited.
+
+Current status: `v0.1.0` source release. It is usable as an early CLI baseline, but it should not be treated as a production-grade automation system yet.
+
+### What It Does
+
+- Discovers and inspects plugin manifests.
+- Statically assesses PostgreSQL extension source trees for OpenTenBase migration risks.
+- Lints plugin package structure.
+- Builds deploy, verify, and rollback plans.
+- Runs local deploy / verify / rollback flows for the bundled smoke plugin.
+- Distributes plugin payload files across a declared OpenTenBase topology.
+- Registers extension metadata once on the primary coordinator, then verifies coordinator views with read-only queries.
+- Runs distributed white-box verification for coordinator/datanode connectivity, extension versions, payload checksums, and prepared transaction residue.
+- Records action state, archive metadata, and reports.
+- Shows role-scoped governance plans for coordinator / datanode / all targets.
+
+### What It Is Not
+
+PluginCtl is currently not:
+
+- an OpenTenBase cluster operations platform
+- a Web UI
+- a plugin marketplace
+- a multi-database adapter
+- a batch deployment and upgrade system
+- an automatic repair tool
+- a production-grade rollback system
+
+### Installation
 
 Requirements:
 
 - Python 3.11+
-- `pip`
-- Docker, only for the local OpenTenBase sandbox flow
-- `ssh`, `scp`, and `psql`, only for distributed cluster operations
+- pip
+- Docker, optional, for the local OpenTenBase sandbox flow
+- `psql`, `ssh`, and `scp`, optional, for distributed cluster operations
 
 Install from source:
 
 ```bash
-git clone https://github.com/iamkuangzhang/opentenbase-plugin_ctl.git
-cd opentenbase-plugin_ctl
+git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
+cd opentenbase-pluginctl
 python -m pip install -e .
 ```
 
 Verify the CLI:
 
 ```bash
-plugin_ctl list
-python -m plugin_ctl list
+opentenbase-pluginctl list
 ```
 
-## Quick Start
+`opentenbase-pluginctl` is the recommended command. `python -m plugin_ctl` is kept for development and debugging.
 
-List known plugin manifests:
+### 5-Minute Trial
+
+The bundled `pluginctl_smoke_plugin` is a safe sample plugin for testing PluginCtl itself. Use it before trying real business plugins.
 
 ```bash
-python -m plugin_ctl list
+opentenbase-pluginctl list
+opentenbase-pluginctl inspect pluginctl_smoke_plugin
+opentenbase-pluginctl check pluginctl_smoke_plugin
+opentenbase-pluginctl deploy pluginctl_smoke_plugin
+opentenbase-pluginctl verify pluginctl_smoke_plugin
+opentenbase-pluginctl report
 ```
 
-Inspect a plugin:
+Lower-level governance commands such as `plugin lint`, `plugin plan`, `plugin precheck`, and `plugin diagnose` can be run separately when troubleshooting.
+
+Rollback requires explicit execution:
 
 ```bash
-python -m plugin_ctl inspect pluginctl_smoke_plugin
+opentenbase-pluginctl rollback pluginctl_smoke_plugin
+opentenbase-pluginctl rollback pluginctl_smoke_plugin --execute
+opentenbase-pluginctl verify pluginctl_smoke_plugin --removed
 ```
 
-Run package-only checks that do not require Docker or a live database:
+### Distributed Plugin Package Workflow
 
-```bash
-python -m plugin_ctl plugin lint pluginctl_smoke_plugin
-python -m plugin_ctl plugin plan pluginctl_smoke_plugin
-```
-
-Assess a PostgreSQL extension source tree before adapting it to OpenTenBase:
-
-```bash
-python -m plugin_ctl assess ./pg_extension_source/
-python -m plugin_ctl assess ./pg_extension_source/ --json
-```
-
-Show the latest local action report:
-
-```bash
-python -m plugin_ctl report
-```
-
-## Distributed Cluster Workflow
-
-Copy the example topology file and edit it for your cluster:
-
-```bash
-copy cluster.toml.example cluster.toml
-```
-
-On Linux/macOS:
+Copy and edit the topology file:
 
 ```bash
 cp cluster.toml.example cluster.toml
 ```
 
+Windows PowerShell:
+
+```powershell
+Copy-Item cluster.toml.example cluster.toml
+```
+
 Inspect the topology:
 
 ```bash
-python -m plugin_ctl cluster inspect -f cluster.toml
+opentenbase-pluginctl cluster inspect -f cluster.toml
 ```
 
-Preview physical distribution:
+Recommended distributed workflow:
 
 ```bash
-python -m plugin_ctl deploy pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl assess ./pg_extension_source/
+opentenbase-pluginctl check pluginctl_smoke_plugin
+opentenbase-pluginctl deploy pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl deploy pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl register pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl register pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl verify pluginctl_smoke_plugin -f cluster.toml
+opentenbase-pluginctl plugin consistency pluginctl_smoke_plugin
+opentenbase-pluginctl report
 ```
 
-Execute physical distribution:
+Important boundaries:
+
+- `deploy -f cluster.toml` is dry-run by default.
+- `deploy -f cluster.toml --execute` distributes files only; it does not run `CREATE EXTENSION`.
+- `register -f cluster.toml --execute` runs `CREATE EXTENSION` once on the first coordinator in `cluster.toml`, then checks other coordinators through read-only `pg_extension` queries.
+
+### Common Commands
+
+#### Discovery
 
 ```bash
-python -m plugin_ctl deploy pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl list
+opentenbase-pluginctl inspect <plugin_id>
 ```
 
-Register extension metadata on the primary coordinator, then verify all coordinator views:
+#### Source Migration Assessment
 
 ```bash
-python -m plugin_ctl register pluginctl_smoke_plugin -f cluster.toml --execute
+opentenbase-pluginctl assess <pg_extension_source_path>
+opentenbase-pluginctl assess <pg_extension_source_path> --json
 ```
 
-Run distributed white-box verification:
+`assess` does not compile code, connect to a database, or modify files. It statically checks:
 
-```bash
-python -m plugin_ctl verify pluginctl_smoke_plugin -f cluster.toml
-```
-
-JSON output is available for automation:
-
-```bash
-python -m plugin_ctl verify pluginctl_smoke_plugin -f cluster.toml --json
-python -m plugin_ctl report --json
-```
-
-## What Each Main Command Does
-
-### `check`
-
-```bash
-python -m plugin_ctl check <plugin_id>
-```
-
-Runs a combined governance check. Internally it aggregates package linting, lifecycle planning, pre-deploy checks, and diagnosis.
-
-It does not modify the database or remote filesystem. It may still check the configured local runtime, so it can report environment failures when Docker or OpenTenBase is not running.
-
-### `assess`
-
-```bash
-python -m plugin_ctl assess <pg_extension_source_path>
-python -m plugin_ctl assess <pg_extension_source_path> --json
-```
-
-Statically scans a PostgreSQL extension source tree for OpenTenBase migration risks.
-
-The first version checks:
-
-- whether a `.control` file exists
-- whether SQL install/update files exist
+- `.control` file presence
+- SQL install/update file presence
 - `LANGUAGE C` functions without explicit `SHIPPABLE` or `NOT SHIPPABLE`
 - C-side dynamic table DDL through `SPI_execute`-style calls
 - transaction-control and system-catalog access patterns that need distributed review
 
-It does not compile code, connect to a database, or modify files.
-
-### `deploy`
-
-Local Docker sandbox mode:
+#### Governance
 
 ```bash
-python -m plugin_ctl deploy <plugin_id>
+opentenbase-pluginctl check <plugin_id>
+opentenbase-pluginctl plugin lint <plugin_id>
+opentenbase-pluginctl plugin plan <plugin_id>
+opentenbase-pluginctl plugin precheck <plugin_id>
+opentenbase-pluginctl plugin diagnose <plugin_id>
+opentenbase-pluginctl plugin status <plugin_id>
+opentenbase-pluginctl plugins status
 ```
 
-Distributed physical distribution mode:
+#### Lifecycle
 
 ```bash
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl deploy <plugin_id>
+opentenbase-pluginctl verify <plugin_id>
+opentenbase-pluginctl rollback <plugin_id>
+opentenbase-pluginctl rollback <plugin_id> --execute
+opentenbase-pluginctl verify <plugin_id> --removed
 ```
 
-With `-f cluster.toml`, deploy means physical file distribution only:
-
-- `.so` files go to each node's `lib_dir`.
-- `.control` and `.sql` files go to each node's `extension_dir`.
-- remote files are checked with SHA256 after copy.
-- `CREATE EXTENSION` is not executed.
-
-Without `--execute`, this command is a dry-run plan.
-
-### `register`
+#### Distributed Governance
 
 ```bash
-python -m plugin_ctl register <plugin_id> -f cluster.toml
-python -m plugin_ctl register <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl cluster inspect -f cluster.toml
+opentenbase-pluginctl deploy <plugin_id> -f cluster.toml
+opentenbase-pluginctl deploy <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl register <plugin_id> -f cluster.toml
+opentenbase-pluginctl register <plugin_id> -f cluster.toml --execute
+opentenbase-pluginctl verify <plugin_id> -f cluster.toml
+opentenbase-pluginctl plugin roles <plugin_id>
+opentenbase-pluginctl plugin consistency <plugin_id>
 ```
 
-Registers extension metadata through the primary coordinator.
-
-With `--execute`, it runs:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS <extension_name>;
-```
-
-only on the first coordinator declared in `cluster.toml`.
-
-It then checks extension version consistency across all coordinators through read-only `pg_extension` queries.
-
-It does not copy files and does not connect to datanodes.
-
-`activate` is kept as a deprecated compatibility alias for `register`.
-
-### `verify`
-
-Local smoke verification:
+#### Archive And Reporting
 
 ```bash
-python -m plugin_ctl verify <plugin_id>
+opentenbase-pluginctl plugin archive list
+opentenbase-pluginctl plugin archive inspect <plugin_id>
+opentenbase-pluginctl state <plugin_id>
+opentenbase-pluginctl report
+opentenbase-pluginctl report --json
 ```
 
-Distributed white-box verification:
+#### Runtime Checks
 
 ```bash
-python -m plugin_ctl verify <plugin_id> -f cluster.toml
+opentenbase-pluginctl doctor
+opentenbase-pluginctl cluster status
 ```
 
-Distributed verification is read-only. It checks:
+These commands support plugin management. They are not meant to turn PluginCtl into a generic cluster monitoring platform.
 
-- coordinator extension installation and version consistency
-- CN/DN SQL connectivity
-- CN/DN physical payload file checksum
-- prepared transaction residue in `pg_prepared_xacts`
-
-### `report`
-
-```bash
-python -m plugin_ctl report
-python -m plugin_ctl report --json
-```
-
-Shows local action records written by PluginCtl. It is useful for CLI audit trails, but it is not a substitute for live database verification.
-
-## Advanced Commands
-
-The following commands are kept for troubleshooting and lower-level inspection:
-
-```bash
-python -m plugin_ctl plugin lint <plugin_id>
-python -m plugin_ctl plugin plan <plugin_id>
-python -m plugin_ctl plugin precheck <plugin_id>
-python -m plugin_ctl plugin diagnose <plugin_id>
-python -m plugin_ctl plugin status <plugin_id>
-python -m plugin_ctl plugin roles <plugin_id>
-python -m plugin_ctl plugin consistency <plugin_id>
-python -m plugin_ctl plugin archive list
-python -m plugin_ctl plugin archive inspect <plugin_id>
-python -m plugin_ctl plugins status
-python -m plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
-python -m plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>
-python -m plugin_ctl cluster status
-python -m plugin_ctl doctor
-```
-
-## Plugin Package Layout
-
-A plugin is described by a manifest and payload files.
+### Plugin Package Layout
 
 Example:
 
@@ -299,73 +538,77 @@ examples/plugins/pluginctl_smoke_plugin/
       postuninstall.sql
 ```
 
-The manifest declares:
+A manifest typically declares:
 
-- plugin id and version
-- supported database
-- payload root
-- install, verify, smoke, and rollback SQL
-- installed and removed probes
-- distributed role requirements
-- optional lifecycle hooks
+- `plugin_id`
+- `name`
+- `version`
+- `database`
+- `targets`
+- `payload`
+- `install_sql`
+- `verify_sql`
+- `rollback_sql`
+- `installed_probe`
+- `removed_probe`
+- `distributed`
+- optional role hooks
 
-## Repository Layout
+### Included Plugins
+
+#### `pluginctl_smoke_plugin`
+
+A safe sample plugin used to validate PluginCtl's deploy / verify / rollback / removed verify / archive / consistency flow.
+
+This is the recommended first test plugin.
+
+#### `otb_timeseries`
+
+A reference manifest for a real OpenTenBase time-series plugin. It is useful for governance and state checks, but the current published repository does not claim it as a complete bundled package.
+
+Do not run destructive rollback against `otb_timeseries`.
+
+### Repository Layout
 
 ```text
-catalog/plugins/       reference manifests for plugin payloads
-examples/plugins/      bundled example plugins and legacy payload fixtures
+catalog/plugins/       reference manifests
+examples/plugins/      bundled sample plugins and fixtures
 recipes/               smoke verification SQL
-src/plugin_ctl/        Python package implementation
+src/plugin_ctl/        Python implementation
 tests/                 unit tests
-docs/                  design and status documents
-cluster.toml.example   distributed cluster topology example
+docs/                  design and release documents
+cluster.toml.example   distributed topology example
 ```
 
-## Included Plugins
+### Safety Boundary
 
-### `pluginctl_smoke_plugin`
+Read-only or mostly read-only commands:
 
-A small bundled sample plugin used to validate PluginCtl itself. It supports deploy, verify, rollback, and removed verification.
+- `list`
+- `inspect`
+- `assess`
+- `plugin lint`
+- `plugin plan`
+- `plugin precheck`
+- `plugin diagnose`
+- `plugin roles`
+- `plugin consistency`
+- `plugin archive list`
+- `plugin archive inspect`
+- `plugins status`
+- `verify -f`
+- `report`
 
-Use this plugin first when testing the tool.
+Commands that modify the database or filesystem:
 
-### `otb_timeseries`
+- `deploy <plugin_id>`: local mode runs install SQL.
+- `deploy <plugin_id> -f cluster.toml --execute`: copies remote files through `scp`.
+- `register <plugin_id> -f cluster.toml --execute`: runs `CREATE EXTENSION` on the primary coordinator.
+- `rollback <plugin_id> --execute`: runs the manifest-declared `rollback_sql`.
 
-A reference manifest for a real OpenTenBase time-series plugin payload. It is useful for governance and installed-state checks, but the current published repository should not be treated as proof of a complete clean-room installation path for that plugin.
+Role hooks are currently planned and displayed in plan / roles / diagnose only. If hook execution is added in the future, it must require an explicit flag such as `--execute-hooks`.
 
-## Safety Boundary
-
-Important assumptions:
-
-- `cluster.toml` is trusted administrator configuration.
-- PluginCtl does not treat topology files as untrusted input.
-- `deploy -f --execute` writes remote payload files through `scp`.
-- `activate -f --execute` changes coordinator metadata through `CREATE EXTENSION`.
-- `verify -f` is read-only.
-- rollback is best-effort and must be explicitly executed with `--execute`.
-
-Implementation safety properties:
-
-- `psql`, `ssh`, `scp`, and `docker` are called with argument lists.
-- `shell=True` is not used.
-- extension names are validated as PostgreSQL identifiers before SQL generation.
-- remote system directories are not automatically created.
-- `sudo` is not attempted automatically.
-
-## Not In Scope Yet
-
-PluginCtl currently does not implement:
-
-- automatic plugin source compilation
-- automatic remote repair
-- automatic rollback of coordinator activation
-- a Web UI
-- a plugin marketplace
-- batch deployment and upgrade orchestration
-- cross-database support beyond OpenTenBase
-- an `otb_timeseries`-specific deep verification profile
-
-## Development
+### Development
 
 Run tests:
 
@@ -382,10 +625,10 @@ git diff --check
 Current test baseline:
 
 ```text
-109 unit tests
+120 tests
 ```
 
-## Documentation
+### Documentation
 
 - [M3 Distributed Lifecycle](docs/M3_DISTRIBUTED_LIFECYCLE.md)
 - [M3 Final Status](docs/M3_FINAL_STATUS.md)
