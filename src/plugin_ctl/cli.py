@@ -46,6 +46,7 @@ from .plugin_package import (
 from .plugin_roles import role_steps, role_steps_json, role_summary
 from .report import latest_by_plugin_action, latest_by_plugin_action_json, row_for_record
 from .rollback import rollback_plugin
+from .source_assess import assess_items_json, assess_source
 from .state_store import StateStore
 from .runtime.opentenbase import OpenTenBaseRuntime, ScpSshRemoteExecutor
 from .verify import run_removed_verify, run_smoke_verify
@@ -61,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="plugin_ctl",
         description="OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.",
         epilog=(
-            "main flow: check -> deploy -> activate -> verify -> report; "
+            "main flow: check -> deploy -> register -> verify -> report; "
             "advanced/debug: plugin lint/plan/precheck/diagnose, cluster distribute; "
             "other groups: discovery=list/inspect; lifecycle=rollback; archive=plugin archive list/inspect; "
             "distributed=plugin roles/consistency; runtime=doctor/cluster status"
@@ -82,13 +83,22 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument("--json", action="store_true", help="emit aggregated check result as JSON")
     check_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
 
-    activate_parser = subparsers.add_parser("activate", help="main flow: activate extension metadata on coordinators")
-    activate_parser.add_argument("plugin_id")
-    activate_parser.add_argument("-f", "--cluster-file", type=Path, required=True, help="cluster.toml path")
-    activate_mode = activate_parser.add_mutually_exclusive_group()
-    activate_mode.add_argument("--dry-run", action="store_true", help="show activation and version-check plan only")
-    activate_mode.add_argument("--execute", action="store_true", help="execute CREATE EXTENSION on coordinators")
-    activate_parser.add_argument("--json", action="store_true", help="emit activation report as JSON")
+    assess_parser = subparsers.add_parser("assess", help="governance: statically assess PostgreSQL extension source migration risks")
+    assess_parser.add_argument("source_path", type=Path)
+    assess_parser.add_argument("--json", action="store_true", help="emit assessment result as JSON")
+
+    def add_register_args(command_parser: argparse.ArgumentParser) -> None:
+        command_parser.add_argument("plugin_id")
+        command_parser.add_argument("-f", "--cluster-file", type=Path, required=True, help="cluster.toml path")
+        mode = command_parser.add_mutually_exclusive_group()
+        mode.add_argument("--dry-run", action="store_true", help="show registration and view-check plan only")
+        mode.add_argument("--execute", action="store_true", help="execute CREATE EXTENSION once on the primary coordinator")
+        command_parser.add_argument("--json", action="store_true", help="emit registration report as JSON")
+
+    register_parser = subparsers.add_parser("register", help="main flow: register extension metadata once, then verify CN views")
+    add_register_args(register_parser)
+    activate_parser = subparsers.add_parser("activate", help="deprecated alias for register")
+    add_register_args(activate_parser)
 
     doctor_parser = subparsers.add_parser("doctor", help="runtime: check local OpenTenBase runtime")
     doctor_parser.add_argument("--container", default="opentenbaseDN1")
@@ -596,6 +606,16 @@ def cmd_check(root: Path, plugin_id: str, *, as_json: bool = False, lang: str | 
     return 0
 
 
+def cmd_assess(source_path: Path, *, as_json: bool = False) -> int:
+    items = assess_source(source_path)
+    if as_json:
+        print(json.dumps({"source_path": str(source_path), "items": assess_items_json(items)}, indent=2, ensure_ascii=False))
+    else:
+        rows = [[item.check, item.status, item.path, str(item.line or ""), item.detail] for item in items]
+        print(render_table(["check", "status", "path", "line", "detail"], rows))
+    return 1 if any(item.status == "fail" for item in items) else 0
+
+
 def cmd_plugin_plan(root: Path, plugin_id: str, *, as_json: bool = False, lang: str | None = None) -> int:
     output_lang = normalize_lang(lang)
     manifest = Catalog(root=root).load_one(plugin_id)
@@ -961,7 +981,7 @@ def _render_activation_report(report) -> None:
     print(f"Mode: {report.mode}")
     print(f"Physical distribution: {report.physical_distribution}")
     print(f"Datanodes: {report.datanodes}")
-    print(f"CREATE EXTENSION: {'executed' if report.mode == 'execute' else 'planned'}")
+    print(f"CREATE EXTENSION: {'executed on primary CN only' if report.mode == 'execute' else 'planned on primary CN only'}")
     activation_rows = [
         [
             result.node,
@@ -974,8 +994,8 @@ def _render_activation_report(report) -> None:
         for result in report.activation
     ]
     if activation_rows:
-        print("Activation:")
-        print(render_table(["node", "activate_status", "returncode", "sql", "stdout", "stderr"], activation_rows))
+        print("Registration:")
+        print(render_table(["node", "register_status", "returncode", "sql", "stdout", "stderr"], activation_rows))
     version_rows = [
         [
             result.node,
@@ -1005,13 +1025,15 @@ def _render_activation_report(report) -> None:
         print("Result: OK")
 
 
-def cmd_activate(root: Path, plugin_id: str, cluster_file: Path, *, execute: bool = False, as_json: bool = False) -> int:
+def cmd_register(root: Path, plugin_id: str, cluster_file: Path, *, execute: bool = False, as_json: bool = False, deprecated_alias: bool = False) -> int:
     config = load_cluster_config(cluster_file)
     manifest = Catalog(root=root).load_one(plugin_id)
     report = execute_activation(config, manifest, PsqlCoordinatorExecutor()) if execute else dry_run_activation_plan(config, manifest)
     if as_json:
         print(json.dumps(activation_report_json(report), indent=2, ensure_ascii=False))
     else:
+        if deprecated_alias:
+            print("Warning: activate is deprecated; use register.")
         _render_activation_report(report)
     return 1 if report.errors else 0
 
@@ -1124,8 +1146,12 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_inspect(args.root, args.plugin_id)
         if args.command == "check":
             return cmd_check(args.root, args.plugin_id, as_json=args.json, lang=args.lang)
+        if args.command == "assess":
+            return cmd_assess(args.source_path, as_json=args.json)
+        if args.command == "register":
+            return cmd_register(args.root, args.plugin_id, args.cluster_file, execute=args.execute, as_json=args.json)
         if args.command == "activate":
-            return cmd_activate(args.root, args.plugin_id, args.cluster_file, execute=args.execute, as_json=args.json)
+            return cmd_register(args.root, args.plugin_id, args.cluster_file, execute=args.execute, as_json=args.json, deprecated_alias=True)
         if args.command == "doctor":
             return cmd_doctor(args)
         if args.command == "cluster":

@@ -7,9 +7,10 @@ OpenTenBase PluginCtl is a CLI tool for managing the lifecycle of OpenTenBase pl
 It focuses on plugin delivery and governance:
 
 - package inspection
+- PostgreSQL extension source risk assessment
 - deployment planning
 - physical payload distribution
-- coordinator-side extension activation
+- primary-coordinator extension registration
 - distributed white-box verification
 - local lifecycle reporting
 
@@ -22,9 +23,10 @@ This repository is currently a source-release baseline. It is usable as a CLI pr
 The main tested flow is:
 
 ```bash
+python -m plugin_ctl assess ./pg_extension_source/
 python -m plugin_ctl check <plugin_id>
 python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl activate <plugin_id> -f cluster.toml --execute
+python -m plugin_ctl register <plugin_id> -f cluster.toml --execute
 python -m plugin_ctl verify <plugin_id> -f cluster.toml
 python -m plugin_ctl report
 ```
@@ -83,6 +85,13 @@ python -m plugin_ctl plugin lint pluginctl_smoke_plugin
 python -m plugin_ctl plugin plan pluginctl_smoke_plugin
 ```
 
+Assess a PostgreSQL extension source tree before adapting it to OpenTenBase:
+
+```bash
+python -m plugin_ctl assess ./pg_extension_source/
+python -m plugin_ctl assess ./pg_extension_source/ --json
+```
+
 Show the latest local action report:
 
 ```bash
@@ -121,10 +130,10 @@ Execute physical distribution:
 python -m plugin_ctl deploy pluginctl_smoke_plugin -f cluster.toml --execute
 ```
 
-Activate the extension on coordinators:
+Register extension metadata on the primary coordinator, then verify all coordinator views:
 
 ```bash
-python -m plugin_ctl activate pluginctl_smoke_plugin -f cluster.toml --execute
+python -m plugin_ctl register pluginctl_smoke_plugin -f cluster.toml --execute
 ```
 
 Run distributed white-box verification:
@@ -152,6 +161,25 @@ Runs a combined governance check. Internally it aggregates package linting, life
 
 It does not modify the database or remote filesystem. It may still check the configured local runtime, so it can report environment failures when Docker or OpenTenBase is not running.
 
+### `assess`
+
+```bash
+python -m plugin_ctl assess <pg_extension_source_path>
+python -m plugin_ctl assess <pg_extension_source_path> --json
+```
+
+Statically scans a PostgreSQL extension source tree for OpenTenBase migration risks.
+
+The first version checks:
+
+- whether a `.control` file exists
+- whether SQL install/update files exist
+- `LANGUAGE C` functions without explicit `SHIPPABLE` or `NOT SHIPPABLE`
+- C-side dynamic table DDL through `SPI_execute`-style calls
+- transaction-control and system-catalog access patterns that need distributed review
+
+It does not compile code, connect to a database, or modify files.
+
 ### `deploy`
 
 Local Docker sandbox mode:
@@ -176,24 +204,28 @@ With `-f cluster.toml`, deploy means physical file distribution only:
 
 Without `--execute`, this command is a dry-run plan.
 
-### `activate`
+### `register`
 
 ```bash
-python -m plugin_ctl activate <plugin_id> -f cluster.toml
-python -m plugin_ctl activate <plugin_id> -f cluster.toml --execute
+python -m plugin_ctl register <plugin_id> -f cluster.toml
+python -m plugin_ctl register <plugin_id> -f cluster.toml --execute
 ```
 
-Activates extension metadata on coordinator nodes.
+Registers extension metadata through the primary coordinator.
 
-With `--execute`, it serially runs:
+With `--execute`, it runs:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS <extension_name>;
 ```
 
-It then checks extension version consistency across coordinators.
+only on the first coordinator declared in `cluster.toml`.
+
+It then checks extension version consistency across all coordinators through read-only `pg_extension` queries.
 
 It does not copy files and does not connect to datanodes.
+
+`activate` is kept as a deprecated compatibility alias for `register`.
 
 ### `verify`
 

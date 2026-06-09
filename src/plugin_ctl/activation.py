@@ -141,11 +141,12 @@ def dry_run_activation_plan(cluster: ClusterConfig, manifest: PluginManifest) ->
     extension_name = extension_name_for(manifest)
     create_sql = create_extension_sql(extension_name)
     version_sql = extension_version_sql(extension_name)
+    primary = cluster.coordinators[0] if cluster.coordinators else None
     activation = tuple(
         ActivationResult(
             node=node.name,
-            status="planned",
-            sql=create_sql,
+            status="planned" if primary and node.name == primary.name else "verify_only",
+            sql=create_sql if primary and node.name == primary.name else "",
             returncode=0,
             stdout="",
             stderr="",
@@ -176,11 +177,11 @@ def dry_run_activation_plan(cluster: ClusterConfig, manifest: PluginManifest) ->
         summary=ActivationSummary(
             total_cn=len(cluster.coordinators),
             activated=0,
-            failed=0,
+            failed=0 if primary else 1,
             missing=0,
             version_mismatch=False,
         ),
-        errors=(),
+        errors=() if primary else ("no coordinator declared in cluster.toml",),
     )
 
 
@@ -190,8 +191,36 @@ def execute_activation(cluster: ClusterConfig, manifest: PluginManifest, executo
     version_sql = extension_version_sql(extension_name)
     activation_results: list[ActivationResult] = []
 
-    # 元数据变更卡点：CREATE EXTENSION 必须按 cluster.toml 中 CN 顺序串行执行，不能并发。
+    # OpenTenBase 会广播扩展元数据；只在 primary CN 执行一次 CREATE EXTENSION，
+    # 其他 CN 只做 pg_extension 只读视图校验，避免多活 CN 重复注册。
+    primary = cluster.coordinators[0] if cluster.coordinators else None
+    if primary is None:
+        return ActivationReport(
+            cluster=cluster.name,
+            plugin_id=manifest.plugin_id,
+            extension_name=extension_name,
+            mode="execute",
+            physical_distribution="not_executed",
+            datanodes="not_connected",
+            activation=(),
+            versions=(),
+            summary=ActivationSummary(total_cn=0, activated=0, failed=1, missing=0, version_mismatch=False),
+            errors=("no coordinator declared in cluster.toml",),
+        )
+
     for node in cluster.coordinators:
+        if node.name != primary.name:
+            activation_results.append(
+                ActivationResult(
+                    node=node.name,
+                    status="verify_only",
+                    sql="",
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                )
+            )
+            continue
         try:
             result = executor.run_sql(node, create_sql)
         except Exception as exc:  # pragma: no cover - defensive boundary for real psql executors.
@@ -209,7 +238,7 @@ def execute_activation(cluster: ClusterConfig, manifest: PluginManifest, executo
         activation_results.append(
             ActivationResult(
                 node=node.name,
-                status="activated" if result.returncode == 0 else "failed",
+                status="registered" if result.returncode == 0 else "failed",
                 sql=create_sql,
                 returncode=result.returncode,
                 stdout=result.stdout,
@@ -284,13 +313,13 @@ def _activation_summary(
     activation_results: list[ActivationResult],
     version_results: tuple[VersionCheckResult, ...],
 ) -> ActivationSummary:
-    failed = len([result for result in activation_results if result.status != "activated"])
+    failed = len([result for result in activation_results if result.status not in {"registered", "verify_only"}])
     missing = len([result for result in version_results if result.status == "missing"])
     present_versions = [result.detected_version for result in version_results if result.status == "present"]
     version_mismatch = len(set(present_versions)) > 1
     return ActivationSummary(
         total_cn=len(cluster.coordinators),
-        activated=len([result for result in activation_results if result.status == "activated"]),
+        activated=len([result for result in activation_results if result.status == "registered"]),
         failed=failed + len([result for result in version_results if result.status == "query_failed"]),
         missing=missing,
         version_mismatch=version_mismatch,
@@ -303,8 +332,8 @@ def _activation_errors(
 ) -> list[str]:
     errors: list[str] = []
     for result in activation_results:
-        if result.status != "activated":
-            errors.append(f"{result.node}: activation failed: {result.stderr.strip() or result.stdout.strip() or result.returncode}")
+        if result.status == "failed":
+            errors.append(f"{result.node}: registration failed: {result.stderr.strip() or result.stdout.strip() or result.returncode}")
     for result in version_results:
         if result.status == "missing":
             errors.append(f"{result.node}: extension missing")

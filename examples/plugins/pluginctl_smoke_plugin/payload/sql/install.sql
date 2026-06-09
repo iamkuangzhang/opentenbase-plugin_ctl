@@ -1,4 +1,4 @@
-﻿CREATE SCHEMA IF NOT EXISTS pluginctl_smoke_plugin;
+CREATE SCHEMA IF NOT EXISTS pluginctl_smoke_plugin;
 
 CREATE TABLE IF NOT EXISTS pluginctl_smoke_plugin.sample_data (
     id integer PRIMARY KEY,

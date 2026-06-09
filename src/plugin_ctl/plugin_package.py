@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 from typing import Any
 
 import yaml
@@ -47,6 +48,7 @@ REQUIRED_FIELDS = ["plugin_id", "name", "version", "description", "database", "t
 REQUIRED_PAYLOAD_FIELDS = ["source_root", "install_sql", "verify_sql", "installed_probe"]
 VALID_DISTRIBUTED_ROLES = {"coordinator", "datanode"}
 VALID_HOOK_ROLES = {"coordinator", "datanode", "all"}
+CREATE_TABLE_RE = re.compile(r"\bcreate\s+(?:unlogged\s+|temporary\s+|temp\s+)?table\b", re.IGNORECASE)
 
 
 def _plugin_id(raw: dict[str, Any], fallback: str = "unknown") -> str:
@@ -287,6 +289,38 @@ def plugin_precheck(root: Path, runtime: Any, manifest: PluginManifest) -> list[
         )
     )
 
+    creates_tables = _install_sql_creates_tables(manifest)
+    default_group = runtime.run_sql("SELECT group_name FROM pgxc_group WHERE default_group = 1 LIMIT 1;")
+    default_group_ok = default_group.returncode == 0 and bool(default_group.stdout.strip())
+    items.append(
+        PrecheckItem(
+            plugin_id,
+            "runtime:default_node_group",
+            "pass" if default_group_ok else "fail" if creates_tables else "warn",
+            default_group.stdout.strip()
+            or default_group.stderr.strip()
+            or ("missing default node group; table-creating plugins need CREATE DEFAULT NODE GROUP" if creates_tables else "missing default node group"),
+        )
+    )
+
+    sharding_map = runtime.run_sql(
+        "SELECT count(*) FROM pgxc_shard_map m "
+        "JOIN pgxc_group g ON m.disgroup = g.oid "
+        "WHERE g.default_group = 1;"
+    )
+    sharding_count = _parse_count(sharding_map.stdout)
+    sharding_map_ok = sharding_map.returncode == 0 and sharding_count > 0
+    items.append(
+        PrecheckItem(
+            plugin_id,
+            "runtime:sharding_map",
+            "pass" if sharding_map_ok else "fail" if creates_tables else "warn",
+            f"{sharding_count} shard map rows for default group"
+            if sharding_map.returncode == 0
+            else sharding_map.stderr.strip() or sharding_map.stdout.strip() or "failed to read pgxc_shard_map",
+        )
+    )
+
     required_roles = list(manifest.distributed.get("required_roles", []))
     if required_roles:
         available_roles = cluster_roles(runtime)
@@ -325,6 +359,22 @@ def plugin_precheck(root: Path, runtime: Any, manifest: PluginManifest) -> list[
         )
     )
     return items
+
+
+def _install_sql_creates_tables(manifest: PluginManifest) -> bool:
+    try:
+        text = manifest.install_sql.read_text(encoding="utf-8-sig")
+    except OSError:
+        return False
+    return CREATE_TABLE_RE.search(text) is not None
+
+
+def _parse_count(stdout: str) -> int:
+    for line in stdout.splitlines():
+        line = line.strip()
+        if line.isdigit():
+            return int(line)
+    return 0
 
 
 def precheck_items_json(items: list[PrecheckItem]) -> list[dict[str, str]]:

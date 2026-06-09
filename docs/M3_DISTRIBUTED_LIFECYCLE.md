@@ -5,9 +5,10 @@
 M3 freezes the distributed OpenTenBase plugin lifecycle around the following main flow:
 
 ```bash
+python -m plugin_ctl assess ./pg_extension_source/
 python -m plugin_ctl check <plugin_id>
 python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl activate <plugin_id> -f cluster.toml --execute
+python -m plugin_ctl register <plugin_id> -f cluster.toml --execute
 python -m plugin_ctl verify <plugin_id> -f cluster.toml
 python -m plugin_ctl report
 ```
@@ -16,7 +17,7 @@ The goal is to make plugin delivery explicit and auditable:
 
 - Check the package and environment before changing anything.
 - Physically distribute declared payload files.
-- Activate extension metadata on coordinators.
+- Register extension metadata once through the primary coordinator.
 - Run distributed white-box verification.
 - Record and inspect local action results.
 
@@ -59,6 +60,17 @@ Each node must declare:
 
 The tool does not treat `cluster.toml` as untrusted user input.
 
+## Step 0: assess
+
+```bash
+python -m plugin_ctl assess ./pg_extension_source/
+python -m plugin_ctl assess ./pg_extension_source/ --json
+```
+
+`assess` statically scans a PostgreSQL extension source tree for OpenTenBase migration risks. It does not compile code, connect to OpenTenBase, or modify files.
+
+The MVP checks `.control` files, SQL/C source presence, `LANGUAGE C` functions without explicit `SHIPPABLE` / `NOT SHIPPABLE`, C-side dynamic table DDL, transaction-control patterns, and system-catalog access.
+
 ## Step 1: check
 
 ```bash
@@ -98,31 +110,34 @@ Distributed deploy currently means physical payload distribution only:
 
 It does not run `CREATE EXTENSION`.
 
-## Step 3: activate -f
+## Step 3: register -f
 
 Dry-run:
 
 ```bash
-python -m plugin_ctl activate <plugin_id> -f cluster.toml
+python -m plugin_ctl register <plugin_id> -f cluster.toml
 ```
 
 Execute:
 
 ```bash
-python -m plugin_ctl activate <plugin_id> -f cluster.toml --execute
+python -m plugin_ctl register <plugin_id> -f cluster.toml --execute
 ```
 
-Activation behavior:
+Registration behavior:
 
 - Reads `extension_name` from manifest, falling back to `plugin_id`.
 - Validates the name as a PostgreSQL identifier.
-- Runs `CREATE EXTENSION IF NOT EXISTS <extension_name>;` on coordinators only.
-- Coordinator activation is serial, in `cluster.toml` order.
+- Runs `CREATE EXTENSION IF NOT EXISTS <extension_name>;` only on the first coordinator declared in `cluster.toml`.
+- Treats that first coordinator as the primary coordinator for metadata registration.
+- Verifies all coordinators through read-only `pg_extension` queries.
 - Version reconciliation across coordinators is read-only and concurrent.
 
 It does not distribute files and does not connect to datanodes.
 
-There is no automatic rollback of already activated coordinators in M3.
+`activate` remains available as a deprecated compatibility alias for `register`.
+
+There is no automatic rollback of already registered metadata in M3.
 
 ## Step 4: verify -f
 
@@ -144,7 +159,7 @@ It does not:
 
 - Execute scp.
 - Run `CREATE EXTENSION`.
-- Activate metadata.
+- Register metadata.
 - Run a plugin-specific timeseries profile.
 
 Prepared transaction residue is reported as a risk requiring manual confirmation. The tool does not claim the residue was caused by the current plugin.
@@ -167,6 +182,7 @@ python -m plugin_ctl plugin lint <plugin_id>
 python -m plugin_ctl plugin plan <plugin_id>
 python -m plugin_ctl plugin precheck <plugin_id>
 python -m plugin_ctl plugin diagnose <plugin_id>
+python -m plugin_ctl assess ./pg_extension_source/
 python -m plugin_ctl cluster inspect -f cluster.toml
 python -m plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
 python -m plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>

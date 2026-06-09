@@ -36,6 +36,8 @@ class PrecheckRuntime:
         installed_stdout: str = "",
         installed_stderr: str = "missing",
         remote_tmp_ok: bool = True,
+        default_group_stdout: str = "default_group\n",
+        sharding_map_stdout: str = "16\n",
     ) -> None:
         self.connection_ok = connection_ok
         self.roles_stdout = roles_stdout
@@ -43,6 +45,8 @@ class PrecheckRuntime:
         self.installed_stdout = installed_stdout
         self.installed_stderr = installed_stderr
         self.remote_tmp_ok = remote_tmp_ok
+        self.default_group_stdout = default_group_stdout
+        self.sharding_map_stdout = sharding_map_stdout
         self.sql_calls: list[str] = []
         self.exec_calls: list[tuple[str, ...]] = []
 
@@ -52,6 +56,10 @@ class PrecheckRuntime:
             return subprocess.CompletedProcess(args=["psql"], returncode=0 if self.connection_ok else 1, stdout="1\n" if self.connection_ok else "", stderr="" if self.connection_ok else "down")
         if sql == "SELECT version();":
             return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="OpenTenBase test\n", stderr="")
+        if "FROM pgxc_group" in sql:
+            return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout=self.default_group_stdout, stderr="")
+        if "FROM pgxc_shard_map" in sql:
+            return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout=self.sharding_map_stdout, stderr="")
         if "SELECT DISTINCT node_type" in sql:
             return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout=self.roles_stdout, stderr="")
         if "FROM pgxc_node" in sql:
@@ -80,13 +88,14 @@ def write_plugin(
     include_removed_probe: bool = True,
     include_installed_probe: bool = True,
     create_files: bool = True,
+    install_sql: str = "CREATE SCHEMA IF NOT EXISTS lint_plugin;",
 ) -> Path:
     manifest_dir = platform_root / "examples" / "plugins" / plugin_id
     payload_dir = platform_root / "payload" / plugin_id
     manifest_dir.mkdir(parents=True, exist_ok=True)
     if create_files:
         (payload_dir / "sql").mkdir(parents=True, exist_ok=True)
-        (payload_dir / "sql" / "install.sql").write_text("CREATE SCHEMA IF NOT EXISTS lint_plugin;", encoding="utf-8")
+        (payload_dir / "sql" / "install.sql").write_text(install_sql, encoding="utf-8")
         (payload_dir / "sql" / "verify.sql").write_text("SELECT 1;", encoding="utf-8")
         (payload_dir / "sql" / "rollback.sql").write_text("DROP SCHEMA IF EXISTS lint_plugin;", encoding="utf-8")
 
@@ -273,8 +282,45 @@ class PluginPackagePrecheckTest(unittest.TestCase):
 
             self.assertFalse([item for item in items if item.status == "fail"])
             self.assertIn({"plugin_id": "lint_plugin", "check": "runtime:connection", "status": "pass", "detail": "1"}, payload)
+            self.assertIn({"plugin_id": "lint_plugin", "check": "runtime:default_node_group", "status": "pass", "detail": "default_group"}, payload)
+            self.assertIn({"plugin_id": "lint_plugin", "check": "runtime:sharding_map", "status": "pass", "detail": "16 shard map rows for default group"}, payload)
             self.assertIn("SELECT lint_plugin.version();", runtime.sql_calls)
             self.assertEqual(runtime.exec_calls, [("bash", "-lc", "test -w /tmp")])
+
+    def test_precheck_missing_default_group_fails_for_table_creating_plugin(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            platform_root = Path(tmpdir) / "platform"
+            manifest = load_manifest(write_plugin(platform_root, install_sql="CREATE TABLE lint_plugin.t(id int);"))
+            runtime = PrecheckRuntime(default_group_stdout="")
+
+            items = plugin_precheck(platform_root, runtime, manifest)
+
+            default_group = next(item for item in items if item.check == "runtime:default_node_group")
+            self.assertEqual(default_group.status, "fail")
+            self.assertIn("CREATE DEFAULT NODE GROUP", default_group.detail)
+
+    def test_precheck_missing_sharding_map_fails_for_table_creating_plugin(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            platform_root = Path(tmpdir) / "platform"
+            manifest = load_manifest(write_plugin(platform_root, install_sql="CREATE TABLE lint_plugin.t(id int);"))
+            runtime = PrecheckRuntime(sharding_map_stdout="0\n")
+
+            items = plugin_precheck(platform_root, runtime, manifest)
+
+            sharding_map = next(item for item in items if item.check == "runtime:sharding_map")
+            self.assertEqual(sharding_map.status, "fail")
+            self.assertEqual(sharding_map.detail, "0 shard map rows for default group")
+
+    def test_precheck_missing_sharding_map_warns_for_non_table_plugin(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            platform_root = Path(tmpdir) / "platform"
+            manifest = load_manifest(write_plugin(platform_root))
+            runtime = PrecheckRuntime(default_group_stdout="", sharding_map_stdout="0\n")
+
+            items = plugin_precheck(platform_root, runtime, manifest)
+
+            self.assertEqual(next(item for item in items if item.check == "runtime:default_node_group").status, "warn")
+            self.assertEqual(next(item for item in items if item.check == "runtime:sharding_map").status, "warn")
 
     def test_precheck_connection_failure_stops_runtime_checks(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

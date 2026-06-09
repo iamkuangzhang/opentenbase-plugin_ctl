@@ -3,6 +3,7 @@
 import shutil
 import subprocess
 from dataclasses import dataclass
+import os
 from pathlib import Path
 from typing import Protocol
 
@@ -101,11 +102,28 @@ class OpenTenBaseRuntime:
     user: str = "opentenbase"
     database: str = "postgres"
     timeout_seconds: int = 10
+    mode: str | None = None
+
+    def runtime_mode(self) -> str:
+        configured = (self.mode or os.getenv("OPENTENBASE_PLUGINCTL_RUNTIME") or "").strip().lower()
+        if configured in {"local", "bare", "bare-metal"}:
+            return "local"
+        if configured == "docker":
+            return "docker"
+        return "docker" if shutil.which("docker") is not None else "local"
 
     def docker_available(self) -> bool:
+        if self.runtime_mode() == "local":
+            return True
         return shutil.which("docker") is not None
 
     def psql_path(self) -> str:
+        if self.runtime_mode() == "local":
+            return (
+                os.getenv("OPENTENBASE_PLUGINCTL_PSQL")
+                or shutil.which("psql")
+                or "/data/opentenbase/install/opentenbase_bin_v2.0/bin/psql"
+            )
         result = subprocess.run(
             ["docker", "exec", self.container, "bash", "-lc", "command -v psql"],
             check=False,
@@ -118,6 +136,8 @@ class OpenTenBaseRuntime:
         return "/data/opentenbase/install/opentenbase_bin_v2.0/bin/psql"
 
     def list_containers(self) -> list[str]:
+        if self.runtime_mode() == "local":
+            return []
         result = subprocess.run(
             ["docker", "ps", "--format", "{{.Names}}"],
             check=False,
@@ -129,6 +149,8 @@ class OpenTenBaseRuntime:
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     def list_container_statuses(self) -> dict[str, str]:
+        if self.runtime_mode() == "local":
+            return {}
         result = subprocess.run(
             ["docker", "ps", "-a", "--format", "{{.Names}}|{{.Status}}"],
             check=False,
@@ -148,10 +170,7 @@ class OpenTenBaseRuntime:
 
     def run_sql(self, sql: str) -> subprocess.CompletedProcess[str]:
         psql = self.psql_path()
-        args = [
-                "docker",
-                "exec",
-                self.container,
+        psql_args = [
                 psql,
                 "-X",
                 "-A",
@@ -166,6 +185,14 @@ class OpenTenBaseRuntime:
                 self.database,
                 "-c",
                 sql,
+            ]
+        if self.runtime_mode() == "local":
+            return self._run(psql_args)
+        args = [
+                "docker",
+                "exec",
+                self.container,
+                *psql_args,
             ]
         return self._run(args)
 
@@ -187,18 +214,31 @@ class OpenTenBaseRuntime:
             )
 
     def exec(self, *args: str) -> subprocess.CompletedProcess[str]:
+        if self.runtime_mode() == "local":
+            return self._run(list(args))
         return self._run(["docker", "exec", self.container, *args])
 
     def copy_to_container(self, source: Path, target: str) -> subprocess.CompletedProcess[str]:
+        if self.runtime_mode() == "local":
+            args = ["copy", str(source), target]
+            try:
+                target_path = Path(target)
+                target_path.mkdir(parents=True, exist_ok=True)
+                if source.is_dir():
+                    destination = target_path / source.name
+                    if destination.exists():
+                        shutil.rmtree(destination)
+                    shutil.copytree(source, destination)
+                else:
+                    shutil.copy2(source, target_path / source.name)
+                return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+            except OSError as exc:
+                return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr=str(exc))
         return self._run(["docker", "cp", str(source), f"{self.container}:{target}"])
 
     def run_sql_file(self, file_path: str) -> subprocess.CompletedProcess[str]:
         psql = self.psql_path()
-        return self._run(
-            [
-                "docker",
-                "exec",
-                self.container,
+        psql_args = [
                 psql,
                 "-X",
                 "-v",
@@ -214,15 +254,20 @@ class OpenTenBaseRuntime:
                 "-f",
                 file_path,
             ]
-        )
-
-    def run_sql_at(self, host: str, port: int, sql: str) -> subprocess.CompletedProcess[str]:
-        psql = self.psql_path()
+        if self.runtime_mode() == "local":
+            return self._run(psql_args)
         return self._run(
             [
                 "docker",
                 "exec",
                 self.container,
+                *psql_args,
+            ]
+        )
+
+    def run_sql_at(self, host: str, port: int, sql: str) -> subprocess.CompletedProcess[str]:
+        psql = self.psql_path()
+        psql_args = [
                 psql,
                 "-X",
                 "-A",
@@ -237,5 +282,14 @@ class OpenTenBaseRuntime:
                 self.database,
                 "-c",
                 sql,
+            ]
+        if self.runtime_mode() == "local":
+            return self._run(psql_args)
+        return self._run(
+            [
+                "docker",
+                "exec",
+                self.container,
+                *psql_args,
             ]
         )

@@ -101,18 +101,20 @@ class ActivationTest(unittest.TestCase):
 
         self.assertEqual(report.mode, "execute")
         self.assertEqual(report.datanodes, "not_connected")
-        self.assertEqual(report.summary.activated, 2)
+        self.assertEqual(report.summary.activated, 1)
         self.assertFalse(report.summary.version_mismatch)
         self.assertEqual(report.errors, ())
 
-    def test_activation_stage_runs_in_coordinator_order(self) -> None:
+    def test_register_stage_runs_create_extension_on_primary_cn_only(self) -> None:
         executor = FakeCoordinatorExecutor()
         execute_activation(self.cluster, self.manifest, executor)
 
         self.assertEqual(executor.calls[0][0], "cn001")
-        self.assertEqual(executor.calls[1][0], "cn002")
         self.assertTrue(executor.calls[0][1].startswith("CREATE EXTENSION"))
-        self.assertTrue(executor.calls[1][1].startswith("CREATE EXTENSION"))
+        create_calls = [call for call in executor.calls if call[1].startswith("CREATE EXTENSION")]
+        self.assertEqual(create_calls, [("cn001", "CREATE EXTENSION IF NOT EXISTS pluginctl_smoke_plugin;")])
+        version_calls = [call[0] for call in executor.calls if call[1].startswith("SELECT extversion")]
+        self.assertEqual(version_calls, ["cn001", "cn002"])
 
     def test_missing_extension_fails_version_check(self) -> None:
         report = execute_activation(self.cluster, self.manifest, FakeCoordinatorExecutor(versions={"cn001": "0.1.0", "cn002": ""}))
@@ -127,10 +129,10 @@ class ActivationTest(unittest.TestCase):
         self.assertTrue(report.summary.version_mismatch)
         self.assertTrue(any("version mismatch" in error for error in report.errors))
 
-    def test_activation_failure_is_structured(self) -> None:
-        report = execute_activation(self.cluster, self.manifest, FakeCoordinatorExecutor(fail_activate_for="cn002"))
+    def test_registration_failure_is_structured(self) -> None:
+        report = execute_activation(self.cluster, self.manifest, FakeCoordinatorExecutor(fail_activate_for="cn001"))
 
-        failed = next(item for item in report.activation if item.node == "cn002")
+        failed = next(item for item in report.activation if item.node == "cn001")
         self.assertEqual(failed.status, "failed")
         self.assertIn("activate failed", failed.stderr)
         self.assertTrue(report.errors)
@@ -180,35 +182,35 @@ class ActivationCliTest(unittest.TestCase):
             code = main(argv)
         return code, output.getvalue()
 
-    def test_activate_defaults_to_dry_run_without_executor(self) -> None:
+    def test_register_defaults_to_dry_run_without_executor(self) -> None:
         with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("dry-run must not create psql executor")):
-            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
+            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
 
         self.assertEqual(code, 0)
         self.assertIn("Mode: dry-run", output)
         self.assertIn("Physical distribution: not_executed", output)
         self.assertIn("Datanodes: not_connected", output)
-        self.assertIn("CREATE EXTENSION: planned", output)
+        self.assertIn("CREATE EXTENSION: planned on primary CN only", output)
 
-    def test_activate_execute_uses_executor(self) -> None:
+    def test_register_execute_uses_executor_once_then_verifies_all_cn(self) -> None:
         fake = FakeCoordinatorExecutor()
         with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=fake):
-            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute"])
+            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute"])
 
         self.assertEqual(code, 0)
         self.assertIn("Mode: execute", output)
-        self.assertIn("CREATE EXTENSION: executed", output)
+        self.assertIn("CREATE EXTENSION: executed on primary CN only", output)
         self.assertIn("Result: OK", output)
-        self.assertTrue(fake.calls)
+        self.assertEqual(len([call for call in fake.calls if call[1].startswith("CREATE EXTENSION")]), 1)
 
-    def test_activate_rejects_dry_run_and_execute_together(self) -> None:
+    def test_register_rejects_dry_run_and_execute_together(self) -> None:
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
-                main(["activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run", "--execute"])
+                main(["register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run", "--execute"])
 
-    def test_activate_execute_json_shape_is_stable(self) -> None:
+    def test_register_execute_json_shape_is_stable(self) -> None:
         with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=FakeCoordinatorExecutor()):
-            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute", "--json"])
+            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute", "--json"])
 
         self.assertEqual(code, 0)
         payload = json.loads(output)
@@ -220,6 +222,13 @@ class ActivationCliTest(unittest.TestCase):
         self.assertEqual(payload["datanodes"], "not_connected")
         for key in ["activation", "versions", "summary", "errors"]:
             self.assertIn(key, payload)
+
+    def test_activate_alias_still_works_with_deprecation_notice(self) -> None:
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("dry-run must not create psql executor")):
+            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
+
+        self.assertEqual(code, 0)
+        self.assertIn("deprecated", output)
 
 
 if __name__ == "__main__":

@@ -57,6 +57,10 @@ class FakeLocalRuntime:
             return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="1\n", stderr="")
         if sql == "SELECT version();":
             return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="OpenTenBase test\n", stderr="")
+        if "FROM pgxc_group" in sql:
+            return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="default_group\n", stderr="")
+        if "FROM pgxc_shard_map" in sql:
+            return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="16\n", stderr="")
         if "SELECT DISTINCT node_type" in sql:
             return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="C\n", stderr="")
         if "FROM pgxc_node" in sql:
