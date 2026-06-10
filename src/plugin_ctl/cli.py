@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 from . import __version__
@@ -46,6 +47,7 @@ from .plugin_package import (
 from .plugin_roles import role_steps, role_steps_json, role_summary
 from .report import latest_by_plugin_action, latest_by_plugin_action_json, row_for_record
 from .rollback import rollback_plugin
+from .shell import run_shell
 from .source_assess import assess_items_json, assess_source
 from .state_store import StateStore
 from .runtime.opentenbase import OpenTenBaseRuntime, ScpSshRemoteExecutor
@@ -73,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    subparsers.add_parser("shell", help="interactive plugin lifecycle shell")
     subparsers.add_parser("list", help="discovery: list plugin manifests")
 
     inspect_parser = subparsers.add_parser("inspect", help="discovery: show a plugin manifest")
@@ -1136,10 +1139,21 @@ def cmd_rollback(root: Path, plugin_id: str, *, execute: bool = False) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv:
+        if sys.stdin.isatty():
+            return run_shell(platform_root())
+        parser = build_parser()
+        parser.print_help()
+        return 0
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
     try:
+        if args.command == "shell":
+            return run_shell(args.root)
         if args.command == "list":
             return cmd_list(args.root)
         if args.command == "inspect":

@@ -1,68 +1,45 @@
 # OpenTenBase PluginCtl
 
-[English](README.md) | [简体中文](README_zh.md)
+[English](README.md) | [绠€浣撲腑鏂嘳(README_zh.md)
 
-OpenTenBase PluginCtl 是一个面向 OpenTenBase 的分布式插件生命周期管理工具。
-
-它的重点不是做通用数据库运维平台，也不是 Web 控制台或插件市场，而是帮助用户把 PostgreSQL / OpenTenBase 插件从“有一堆文件和 SQL”推进到“可检查、可规划、可部署、可注册、可验证、可追踪”的工程化插件包。
-
-当前版本定位：`v0.1.0` source release。它已经可以作为 CLI 工具试用，但仍属于早期版本，不建议直接当作生产环境自动化发布系统。
-
-## 它能做什么
-
-- 发现和查看插件 manifest。
-- 静态扫描 PostgreSQL 插件源码，评估迁移到 OpenTenBase 的分布式风险。
-- 检查插件包结构是否合格。
-- 生成部署、验证、回滚计划。
-- 对本地 OpenTenBase Docker / Linux 环境执行安全样例插件的 deploy / verify / rollback。
-- 在分布式拓扑下分发插件物理文件。
-- 只在第一个，也就是 primary coordinator 上执行一次扩展注册，然后只读验证其他 coordinator 的扩展视图。
-- 做分布式白盒验证，包括 CN/DN 连接、扩展版本、payload 文件 checksum、prepared transaction 残留等。
-- 记录插件 action state、archive、report。
-- 按 coordinator / datanode / all 角色展示插件治理计划。
-
-## 它不是什么
-
-PluginCtl 当前不是：
-
-- OpenTenBase 集群运维平台
+OpenTenBase PluginCtl 鏄竴涓潰鍚?OpenTenBase 鐨勫垎甯冨紡鎻掍欢鐢熷懡鍛ㄦ湡绠＄悊宸ュ叿銆?
+瀹冪殑閲嶇偣涓嶆槸鍋氶€氱敤鏁版嵁搴撹繍缁村钩鍙帮紝涔熶笉鏄?Web 鎺у埗鍙版垨鎻掍欢甯傚満锛岃€屾槸甯姪鐢ㄦ埛鎶?PostgreSQL / OpenTenBase 鎻掍欢浠庘€滄湁涓€鍫嗘枃浠跺拰 SQL鈥濇帹杩涘埌鈥滃彲妫€鏌ャ€佸彲瑙勫垝銆佸彲閮ㄧ讲銆佸彲娉ㄥ唽銆佸彲楠岃瘉銆佸彲杩借釜鈥濈殑宸ョ▼鍖栨彃浠跺寘銆?
+褰撳墠鐗堟湰瀹氫綅锛歚v0.1.0` source release銆傚畠宸茬粡鍙互浣滀负 CLI 宸ュ叿璇曠敤锛屼絾浠嶅睘浜庢棭鏈熺増鏈紝涓嶅缓璁洿鎺ュ綋浣滅敓浜х幆澧冭嚜鍔ㄥ寲鍙戝竷绯荤粺銆?
+## 瀹冭兘鍋氫粈涔?
+- 鍙戠幇鍜屾煡鐪嬫彃浠?manifest銆?- 闈欐€佹壂鎻?PostgreSQL 鎻掍欢婧愮爜锛岃瘎浼拌縼绉诲埌 OpenTenBase 鐨勫垎甯冨紡椋庨櫓銆?- 妫€鏌ユ彃浠跺寘缁撴瀯鏄惁鍚堟牸銆?- 鐢熸垚閮ㄧ讲銆侀獙璇併€佸洖婊氳鍒掋€?- 瀵规湰鍦?OpenTenBase Docker / Linux 鐜鎵ц瀹夊叏鏍蜂緥鎻掍欢鐨?deploy / verify / rollback銆?- 鍦ㄥ垎甯冨紡鎷撴墤涓嬪垎鍙戞彃浠剁墿鐞嗘枃浠躲€?- 鍙湪绗竴涓紝涔熷氨鏄?primary coordinator 涓婃墽琛屼竴娆℃墿灞曟敞鍐岋紝鐒跺悗鍙楠岃瘉鍏朵粬 coordinator 鐨勬墿灞曡鍥俱€?- 鍋氬垎甯冨紡鐧界洅楠岃瘉锛屽寘鎷?CN/DN 杩炴帴銆佹墿灞曠増鏈€乸ayload 鏂囦欢 checksum銆乸repared transaction 娈嬬暀绛夈€?- 璁板綍鎻掍欢 action state銆乤rchive銆乺eport銆?- 鎸?coordinator / datanode / all 瑙掕壊灞曠ず鎻掍欢娌荤悊璁″垝銆?
+## 瀹冧笉鏄粈涔?
+PluginCtl 褰撳墠涓嶆槸锛?
+- OpenTenBase 闆嗙兢杩愮淮骞冲彴
 - Web UI
-- 插件市场
-- 多数据库适配层
-- 批量部署和自动升级系统
-- 自动修复工具
-- 生产级回滚系统
+- 鎻掍欢甯傚満
+- 澶氭暟鎹簱閫傞厤灞?- 鎵归噺閮ㄧ讲鍜岃嚜鍔ㄥ崌绾х郴缁?- 鑷姩淇宸ュ叿
+- 鐢熶骇绾у洖婊氱郴缁?
+## 瀹夎
 
-## 安装
-
-环境要求：
-
+鐜瑕佹眰锛?
 - Python 3.11+
 - pip
-- Docker，可选，仅用于本地 OpenTenBase 沙箱流程
-- `psql`、`ssh`、`scp`，可选，仅用于分布式集群流程
+- Docker锛屽彲閫夛紝浠呯敤浜庢湰鍦?OpenTenBase 娌欑娴佺▼
+- `psql`銆乣ssh`銆乣scp`锛屽彲閫夛紝浠呯敤浜庡垎甯冨紡闆嗙兢娴佺▼
 
-从源码安装：
+浠庢簮鐮佸畨瑁咃細
 
 ```bash
-git clone https://github.com/iamkuangzhang/opentenbase-pluginctl.git
-cd opentenbase-pluginctl
+git clone https://github.com/iamkuangzhang/opentenbase-plugin_ctl.git
+cd opentenbase-plugin_ctl
 python -m pip install -e .
 ```
 
-验证命令是否可用：
-
+楠岃瘉鍛戒护鏄惁鍙敤锛?
 ```bash
 opentenbase-pluginctl list
 ```
 
-推荐使用 `opentenbase-pluginctl`。`python -m plugin_ctl` 保留给开发和调试使用。
+鎺ㄨ崘浣跨敤 `opentenbase-pluginctl`銆俙python -m plugin_ctl` 淇濈暀缁欏紑鍙戝拰璋冭瘯浣跨敤銆?
+## 5 鍒嗛挓璇曠敤
 
-## 5 分钟试用
-
-内置的 `pluginctl_smoke_plugin` 是一个安全样例插件，用来验证 PluginCtl 自己的生命周期能力。建议先用它试，不要一开始就拿真实业务插件做破坏性实验。
-
-主流程：
+鍐呯疆鐨?`pluginctl_smoke_plugin` 鏄竴涓畨鍏ㄦ牱渚嬫彃浠讹紝鐢ㄦ潵楠岃瘉 PluginCtl 鑷繁鐨勭敓鍛藉懆鏈熻兘鍔涖€傚缓璁厛鐢ㄥ畠璇曪紝涓嶈涓€寮€濮嬪氨鎷跨湡瀹炰笟鍔℃彃浠跺仛鐮村潖鎬у疄楠屻€?
+涓绘祦绋嬶細
 
 ```bash
 opentenbase-pluginctl list
@@ -73,38 +50,62 @@ opentenbase-pluginctl verify pluginctl_smoke_plugin
 opentenbase-pluginctl report
 ```
 
-更细的治理命令，例如 `plugin lint`、`plugin plan`、`plugin precheck`、`plugin diagnose`，可以在需要排查问题时单独运行。
-
-如果要执行回滚，必须显式加 `--execute`：
-
+鏇寸粏鐨勬不鐞嗗懡浠わ紝渚嬪 `plugin lint`銆乣plugin plan`銆乣plugin precheck`銆乣plugin diagnose`锛屽彲浠ュ湪闇€瑕佹帓鏌ラ棶棰樻椂鍗曠嫭杩愯銆?
+濡傛灉瑕佹墽琛屽洖婊氾紝蹇呴』鏄惧紡鍔?`--execute`锛?
 ```bash
 opentenbase-pluginctl rollback pluginctl_smoke_plugin
 opentenbase-pluginctl rollback pluginctl_smoke_plugin --execute
 opentenbase-pluginctl verify pluginctl_smoke_plugin --removed
 ```
 
-## 分布式插件包流程
+## 浜や簰寮忔彃浠舵帶鍒跺彴
 
-先复制并修改拓扑文件：
+濡傛灉浣犳洿鍠滄绫讳技 `pgxc_ctl` 鐨勪氦浜掓柟寮忥紝鍙互鐩存帴杩涘叆 PluginCtl Shell锛?
+```bash
+plugin_ctl
+```
 
+涔熷彲浠ユ樉寮忚繘鍏ワ細
+
+```bash
+plugin_ctl shell
+opentenbase-pluginctl shell
+```
+
+杩涘叆鍚庡彲浠ヨ緭鍏ョ煭鍛戒护锛屼笉蹇呮瘡娆″啓瀹屾暣鍓嶇紑锛?
+```text
+OpenTenBase PluginCtl Shell
+Type "help" to show commands.
+Type "quit" or "exit" to leave.
+
+pluginctl> list
+pluginctl> check pluginctl_smoke_plugin
+pluginctl> deploy pluginctl_smoke_plugin
+pluginctl> verify pluginctl_smoke_plugin
+pluginctl> report
+pluginctl> quit
+```
+
+PluginCtl Shell 鏄彃浠剁敓鍛藉懆鏈熸帶鍒跺彴锛岀敤鏉ョ鐞嗘彃浠剁殑鍙戠幇銆佹鏌ャ€侀儴缃层€侀獙璇併€佸洖婊氬拰鎶ュ憡銆傚畠涓嶆槸 OpenTenBase 闆嗙兢鎺у埗鍙帮紝涓嶈礋璐ｉ泦缇ゅ惎鍔ㄣ€佸仠姝€佸垵濮嬪寲鎴栫洃鎺с€?
+## 鍒嗗竷寮忔彃浠跺寘娴佺▼
+
+鍏堝鍒跺苟淇敼鎷撴墤鏂囦欢锛?
 ```bash
 cp cluster.toml.example cluster.toml
 ```
 
-Windows PowerShell：
-
+Windows PowerShell锛?
 ```powershell
 Copy-Item cluster.toml.example cluster.toml
 ```
 
-检查拓扑：
+妫€鏌ユ嫇鎵戯細
 
 ```bash
 opentenbase-pluginctl cluster inspect -f cluster.toml
 ```
 
-推荐的完整分布式流程：
-
+鎺ㄨ崘鐨勫畬鏁村垎甯冨紡娴佺▼锛?
 ```bash
 opentenbase-pluginctl assess ./pg_extension_source/
 opentenbase-pluginctl check pluginctl_smoke_plugin
@@ -117,39 +118,34 @@ opentenbase-pluginctl plugin consistency pluginctl_smoke_plugin
 opentenbase-pluginctl report
 ```
 
-这里有三个重要边界：
+杩欓噷鏈変笁涓噸瑕佽竟鐣岋細
 
-- `deploy -f cluster.toml` 默认 dry-run，只展示物理文件分发计划。
-- `deploy -f cluster.toml --execute` 只分发文件，不执行 `CREATE EXTENSION`。
-- `register -f cluster.toml --execute` 只在 `cluster.toml` 中第一个 coordinator 上执行一次 `CREATE EXTENSION`，然后只读检查其他 coordinator 的 `pg_extension` 视图。
+- `deploy -f cluster.toml` 榛樿 dry-run锛屽彧灞曠ず鐗╃悊鏂囦欢鍒嗗彂璁″垝銆?- `deploy -f cluster.toml --execute` 鍙垎鍙戞枃浠讹紝涓嶆墽琛?`CREATE EXTENSION`銆?- `register -f cluster.toml --execute` 鍙湪 `cluster.toml` 涓涓€涓?coordinator 涓婃墽琛屼竴娆?`CREATE EXTENSION`锛岀劧鍚庡彧璇绘鏌ュ叾浠?coordinator 鐨?`pg_extension` 瑙嗗浘銆?
+`activate` 鍙槸 `register` 鐨勬棫鍏煎鍒悕锛屽凡缁忛檷绾э紝涓嶅缓璁户缁娇鐢ㄣ€?
+## 甯哥敤鍛戒护
 
-`activate` 只是 `register` 的旧兼容别名，已经降级，不建议继续使用。
-
-## 常用命令
-
-### 插件发现
+### 鎻掍欢鍙戠幇
 
 ```bash
 opentenbase-pluginctl list
 opentenbase-pluginctl inspect <plugin_id>
 ```
 
-### 源码迁移风险评估
+### 婧愮爜杩佺Щ椋庨櫓璇勪及
 
 ```bash
 opentenbase-pluginctl assess <pg_extension_source_path>
 opentenbase-pluginctl assess <pg_extension_source_path> --json
 ```
 
-`assess` 不编译代码、不连接数据库、不修改文件。它会静态检查：
+`assess` 涓嶇紪璇戜唬鐮併€佷笉杩炴帴鏁版嵁搴撱€佷笉淇敼鏂囦欢銆傚畠浼氶潤鎬佹鏌ワ細
 
-- 是否存在 `.control` 文件
-- 是否存在 SQL 安装或升级文件
-- `LANGUAGE C` 函数是否显式声明 `SHIPPABLE` 或 `NOT SHIPPABLE`
-- C 代码里是否存在 `SPI_execute` 风格的动态建表 DDL
-- 事务控制、系统 catalog 访问等需要分布式审查的风险点
+- 鏄惁瀛樺湪 `.control` 鏂囦欢
+- 鏄惁瀛樺湪 SQL 瀹夎鎴栧崌绾ф枃浠?- `LANGUAGE C` 鍑芥暟鏄惁鏄惧紡澹版槑 `SHIPPABLE` 鎴?`NOT SHIPPABLE`
+- C 浠ｇ爜閲屾槸鍚﹀瓨鍦?`SPI_execute` 椋庢牸鐨勫姩鎬佸缓琛?DDL
+- 浜嬪姟鎺у埗銆佺郴缁?catalog 璁块棶绛夐渶瑕佸垎甯冨紡瀹℃煡鐨勯闄╃偣
 
-### 插件治理
+### 鎻掍欢娌荤悊
 
 ```bash
 opentenbase-pluginctl check <plugin_id>
@@ -161,7 +157,7 @@ opentenbase-pluginctl plugin status <plugin_id>
 opentenbase-pluginctl plugins status
 ```
 
-### 生命周期
+### 鐢熷懡鍛ㄦ湡
 
 ```bash
 opentenbase-pluginctl deploy <plugin_id>
@@ -171,8 +167,7 @@ opentenbase-pluginctl rollback <plugin_id> --execute
 opentenbase-pluginctl verify <plugin_id> --removed
 ```
 
-### 分布式插件治理
-
+### 鍒嗗竷寮忔彃浠舵不鐞?
 ```bash
 opentenbase-pluginctl cluster inspect -f cluster.toml
 opentenbase-pluginctl deploy <plugin_id> -f cluster.toml
@@ -186,8 +181,7 @@ opentenbase-pluginctl cluster distribute <plugin_id> -f cluster.toml --dry-run
 opentenbase-pluginctl cluster distribute <plugin_id> -f cluster.toml --execute
 ```
 
-### 归档和报告
-
+### 褰掓。鍜屾姤鍛?
 ```bash
 opentenbase-pluginctl plugin archive list
 opentenbase-pluginctl plugin archive inspect <plugin_id>
@@ -196,19 +190,15 @@ opentenbase-pluginctl report
 opentenbase-pluginctl report --json
 ```
 
-### 运行时检查
-
+### 杩愯鏃舵鏌?
 ```bash
 opentenbase-pluginctl doctor
 opentenbase-pluginctl cluster status
 ```
 
-这些命令只作为插件管理的支撑，不是为了把 PluginCtl 做成泛集群巡检平台。
-
-## 插件包结构
-
-样例插件目录：
-
+杩欎簺鍛戒护鍙綔涓烘彃浠剁鐞嗙殑鏀拺锛屼笉鏄负浜嗘妸 PluginCtl 鍋氭垚娉涢泦缇ゅ贰妫€骞冲彴銆?
+## 鎻掍欢鍖呯粨鏋?
+鏍蜂緥鎻掍欢鐩綍锛?
 ```text
 examples/plugins/pluginctl_smoke_plugin/
   manifest.yml
@@ -224,8 +214,7 @@ examples/plugins/pluginctl_smoke_plugin/
       postuninstall.sql
 ```
 
-manifest 通常声明：
-
+manifest 閫氬父澹版槑锛?
 - `plugin_id`
 - `name`
 - `version`
@@ -238,23 +227,19 @@ manifest 通常声明：
 - `installed_probe`
 - `removed_probe`
 - `distributed`
-- 可选 role hooks
+- 鍙€?role hooks
 
-## 内置插件
+## 鍐呯疆鎻掍欢
 
 ### `pluginctl_smoke_plugin`
 
-安全样例插件，用于验证 PluginCtl 的 deploy / verify / rollback / removed verify / archive / consistency 流程。
-
-这是推荐的入门测试插件。
-
+瀹夊叏鏍蜂緥鎻掍欢锛岀敤浜庨獙璇?PluginCtl 鐨?deploy / verify / rollback / removed verify / archive / consistency 娴佺▼銆?
+杩欐槸鎺ㄨ崘鐨勫叆闂ㄦ祴璇曟彃浠躲€?
 ### `otb_timeseries`
 
-真实 OpenTenBase 时序插件的 reference manifest。它用于展示真实业务插件的治理和状态检查，但当前发布仓库不把它声明为完整 bundled package。
-
-注意：不要对 `otb_timeseries` 执行破坏性 rollback。
-
-## 仓库结构
+鐪熷疄 OpenTenBase 鏃跺簭鎻掍欢鐨?reference manifest銆傚畠鐢ㄤ簬灞曠ず鐪熷疄涓氬姟鎻掍欢鐨勬不鐞嗗拰鐘舵€佹鏌ワ紝浣嗗綋鍓嶅彂甯冧粨搴撲笉鎶婂畠澹版槑涓哄畬鏁?bundled package銆?
+娉ㄦ剰锛氫笉瑕佸 `otb_timeseries` 鎵ц鐮村潖鎬?rollback銆?
+## 浠撳簱缁撴瀯
 
 ```text
 catalog/plugins/       reference manifests
@@ -266,9 +251,9 @@ docs/                  design and release documents
 cluster.toml.example   distributed topology example
 ```
 
-## 安全边界
+## 瀹夊叏杈圭晫
 
-只读或近似只读命令：
+鍙鎴栬繎浼煎彧璇诲懡浠わ細
 
 - `list`
 - `inspect`
@@ -285,49 +270,37 @@ cluster.toml.example   distributed topology example
 - `verify -f`
 - `report`
 
-会修改数据库或文件系统的命令：
+浼氫慨鏀规暟鎹簱鎴栨枃浠剁郴缁熺殑鍛戒护锛?
+- `deploy <plugin_id>`锛氭湰鍦版ā寮忎細鎵ц瀹夎 SQL銆?- `deploy <plugin_id> -f cluster.toml --execute`锛氫細閫氳繃 `scp` 鍒嗗彂杩滅▼鏂囦欢銆?- `register <plugin_id> -f cluster.toml --execute`锛氬彧鍦ㄧ涓€涓紝涔熷氨鏄?primary coordinator 涓婃墽琛屼竴娆?`CREATE EXTENSION`銆?- `rollback <plugin_id> --execute`锛氫細鎵ц manifest 澹版槑鐨?`rollback_sql`銆?
+褰撳墠 role hooks 鍙繘鍏?plan / roles / diagnose锛屼笉浼氳嚜鍔ㄦ墽琛屻€傛湭鏉ュ鏋滄敮鎸佹墽琛?hook锛屼篃蹇呴』瑕佹眰鏄惧紡鍙傛暟锛屼緥濡?`--execute-hooks`銆?
+## 褰撳墠涓嶅仛
 
-- `deploy <plugin_id>`：本地模式会执行安装 SQL。
-- `deploy <plugin_id> -f cluster.toml --execute`：会通过 `scp` 分发远程文件。
-- `register <plugin_id> -f cluster.toml --execute`：只在第一个，也就是 primary coordinator 上执行一次 `CREATE EXTENSION`。
-- `rollback <plugin_id> --execute`：会执行 manifest 声明的 `rollback_sql`。
+PluginCtl 褰撳墠涓嶅疄鐜帮細
 
-当前 role hooks 只进入 plan / roles / diagnose，不会自动执行。未来如果支持执行 hook，也必须要求显式参数，例如 `--execute-hooks`。
-
-## 当前不做
-
-PluginCtl 当前不实现：
-
-- 自动编译插件源码
-- 自动修复远程节点状态
-- 自动 rollback coordinator 注册
+- 鑷姩缂栬瘧鎻掍欢婧愮爜
+- 鑷姩淇杩滅▼鑺傜偣鐘舵€?- 鑷姩 rollback coordinator 娉ㄥ唽
 - Web UI
-- 插件市场
-- 批量部署和批量升级编排
-- OpenTenBase 之外的跨数据库支持
-- `otb_timeseries` 专用深度验证 profile
+- 鎻掍欢甯傚満
+- 鎵归噺閮ㄧ讲鍜屾壒閲忓崌绾х紪鎺?- OpenTenBase 涔嬪鐨勮法鏁版嵁搴撴敮鎸?- `otb_timeseries` 涓撶敤娣卞害楠岃瘉 profile
 
-## 开发
-
-运行测试：
-
+## 寮€鍙?
+杩愯娴嬭瘯锛?
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-检查空白错误：
+妫€鏌ョ┖鐧介敊璇細
 
 ```bash
 git diff --check
 ```
 
-当前测试基线：
-
+褰撳墠娴嬭瘯鍩虹嚎锛?
 ```text
-120 tests
+132 tests
 ```
 
-## 文档
+## 鏂囨。
 
 - [M3 Distributed Lifecycle](docs/M3_DISTRIBUTED_LIFECYCLE.md)
 - [M3 Final Status](docs/M3_FINAL_STATUS.md)
