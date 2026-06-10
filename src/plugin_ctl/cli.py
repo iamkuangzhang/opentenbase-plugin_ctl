@@ -55,8 +55,63 @@ from .verify import run_removed_verify, run_smoke_verify
 from .util import render_table
 
 
+TOP_LEVEL_COMMANDS = {
+    "shell",
+    "list",
+    "inspect",
+    "check",
+    "assess",
+    "register",
+    "activate",
+    "doctor",
+    "cluster",
+    "plugin",
+    "plugins",
+    "deploy",
+    "verify",
+    "state",
+    "rollback",
+    "report",
+}
+
+
 def platform_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def _has_top_level_command(argv: list[str]) -> bool:
+    return any(arg in TOP_LEVEL_COMMANDS for arg in argv)
+
+
+def _only_root_global_args(argv: list[str]) -> bool:
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg == "--root":
+            if index + 1 >= len(argv):
+                return False
+            index += 2
+            continue
+        if arg.startswith("--root="):
+            index += 1
+            continue
+        return False
+    return True
+
+
+def _root_from_global_args(argv: list[str]) -> Path:
+    root = platform_root()
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg == "--root" and index + 1 < len(argv):
+            root = Path(argv[index + 1])
+            index += 2
+            continue
+        if arg.startswith("--root="):
+            root = Path(arg.split("=", 1)[1])
+        index += 1
+    return root
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1141,10 +1196,14 @@ def cmd_rollback(root: Path, plugin_id: str, *, execute: bool = False) -> int:
 def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
-    if not argv:
-        if sys.stdin.isatty():
-            return run_shell(platform_root())
+    if not _has_top_level_command(argv):
         parser = build_parser()
+        if "-h" in argv or "--help" in argv or "--version" in argv or not _only_root_global_args(argv):
+            parser.parse_args(argv)
+            return 0
+        root = _root_from_global_args(argv)
+        if sys.stdin.isatty():
+            return run_shell(root)
         parser.print_help()
         return 0
 

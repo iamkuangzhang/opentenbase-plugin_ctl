@@ -70,6 +70,32 @@ class PluginCtlShellTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("usage: plugin_ctl", output.getvalue())
 
+    def test_root_only_tty_enters_shell_with_root(self) -> None:
+        with patch("sys.stdin.isatty", return_value=True):
+            with patch("plugin_ctl.cli.run_shell", return_value=0) as shell:
+                code = main(["--root", str(self.root)])
+
+        self.assertEqual(code, 0)
+        shell.assert_called_once_with(self.root)
+
+    def test_root_equals_tty_enters_shell_with_root(self) -> None:
+        with patch("sys.stdin.isatty", return_value=True):
+            with patch("plugin_ctl.cli.run_shell", return_value=0) as shell:
+                code = main([f"--root={self.root}"])
+
+        self.assertEqual(code, 0)
+        shell.assert_called_once_with(self.root)
+
+    def test_root_only_non_tty_prints_help_without_entering_shell(self) -> None:
+        output = io.StringIO()
+        with patch("sys.stdin.isatty", return_value=False):
+            with patch("plugin_ctl.cli.run_shell", side_effect=AssertionError("must not enter shell")):
+                with redirect_stdout(output):
+                    code = main(["--root", str(self.root)])
+
+        self.assertEqual(code, 0)
+        self.assertIn("usage: plugin_ctl", output.getvalue())
+
     def test_explicit_shell_command_enters_shell(self) -> None:
         with patch("plugin_ctl.cli.run_shell", return_value=0) as shell:
             code = main(["--root", str(self.root), "shell"])
