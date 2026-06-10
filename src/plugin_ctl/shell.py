@@ -15,11 +15,13 @@ Type "quit" or "exit" to leave.
 
 HELP_TEXT = """Available commands:
   help
+  init
   list
   inspect <plugin_id>
   check <plugin_id>
   diagnose <plugin_id>
   deploy <plugin_id> [options]
+  register <plugin_id> [options]
   verify <plugin_id> [options]
   rollback <plugin_id> [options]
   report [options]
@@ -27,13 +29,14 @@ HELP_TEXT = """Available commands:
   quit
   exit
 
-PluginCtl Shell manages plugin discovery, checks, deployment, verification,
-rollback, and reports. It does not start, stop, initialize, or monitor an
-OpenTenBase cluster.
+PluginCtl Shell manages plugin discovery, checks, deployment, registration,
+verification, rollback, and reports. "init" only initializes PluginCtl's
+cluster.toml from a running OpenTenBase cluster; it does not start, stop,
+initialize, or monitor an OpenTenBase cluster.
 """
 
 
-SHELL_COMMANDS = {"list", "inspect", "check", "diagnose", "deploy", "verify", "rollback", "report", "doctor"}
+SHELL_COMMANDS = {"list", "inspect", "check", "diagnose", "deploy", "register", "verify", "rollback", "report", "doctor"}
 
 
 Dispatcher = Callable[[list[str]], int]
@@ -44,6 +47,8 @@ def translate_shell_command(parts: list[str]) -> list[str] | None:
     if not parts:
         return []
     command = parts[0]
+    if command == "init":
+        return ["cluster", "init", *parts[1:]]
     if command == "diagnose":
         return ["plugin", "diagnose", *parts[1:]]
     if command in SHELL_COMMANDS:
@@ -110,4 +115,3 @@ def run_shell(
         except KeyboardInterrupt:
             print("", file=out)
             continue
-

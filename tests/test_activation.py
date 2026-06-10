@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -201,6 +202,16 @@ class ActivationCliTest(unittest.TestCase):
         self.assertIn("Mode: execute", output)
         self.assertIn("CREATE EXTENSION: executed on primary CN only", output)
         self.assertIn("Result: OK", output)
+        self.assertEqual(len([call for call in fake.calls if call[1].startswith("CREATE EXTENSION")]), 1)
+
+    def test_register_uses_default_cluster_config_when_file_is_omitted(self) -> None:
+        fake = FakeCoordinatorExecutor()
+        with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(self.cluster_file)}):
+            with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=fake):
+                code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "--execute"])
+
+        self.assertEqual(code, 0)
+        self.assertIn("CREATE EXTENSION: executed on primary CN only", output)
         self.assertEqual(len([call for call in fake.calls if call[1].startswith("CREATE EXTENSION")]), 1)
 
     def test_register_rejects_dry_run_and_execute_together(self) -> None:

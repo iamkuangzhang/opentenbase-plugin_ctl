@@ -15,7 +15,23 @@ from .activation import (
     execute_activation,
 )
 from .catalog import Catalog
-from .cluster import ClusterConfig, ClusterNode, load_cluster_config, run_cluster_status
+from .cluster import (
+    DEFAULT_DATABASE,
+    DEFAULT_DB_USER,
+    DEFAULT_EXTENSION_DIR,
+    DEFAULT_LIB_DIR,
+    DEFAULT_SSH_PORT,
+    DEFAULT_SSH_USER,
+    ClusterConfig,
+    ClusterNode,
+    default_cluster_config_path,
+    discover_cluster_config,
+    find_cluster_config,
+    load_cluster_config,
+    require_cluster_config,
+    run_cluster_status,
+    write_cluster_config,
+)
 from .deploy import deploy_sql_payload
 from .distribution import (
     build_distribution_plan,
@@ -64,6 +80,7 @@ TOP_LEVEL_COMMANDS = {
     "register",
     "activate",
     "doctor",
+    "init",
     "cluster",
     "plugin",
     "plugins",
@@ -119,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="plugin_ctl",
         description="OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.",
         epilog=(
-            "main flow: check -> deploy -> register -> verify -> report; "
+            "main flow: init -> check -> deploy -> register -> verify -> report; "
             "advanced/debug: plugin lint/plan/precheck/diagnose, cluster distribute; "
             "other groups: discovery=list/inspect; lifecycle=rollback; archive=plugin archive list/inspect; "
             "distributed=plugin roles/consistency; runtime=doctor/cluster status"
@@ -147,7 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     def add_register_args(command_parser: argparse.ArgumentParser) -> None:
         command_parser.add_argument("plugin_id")
-        command_parser.add_argument("-f", "--cluster-file", type=Path, required=True, help="cluster.toml path")
+        command_parser.add_argument("-f", "--cluster-file", type=Path, help="cluster.toml path; defaults to ./cluster.toml or ~/.plugin_ctl/cluster.toml")
         mode = command_parser.add_mutually_exclusive_group()
         mode.add_argument("--dry-run", action="store_true", help="show registration and view-check plan only")
         mode.add_argument("--execute", action="store_true", help="execute CREATE EXTENSION once on the primary coordinator")
@@ -157,6 +174,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_register_args(register_parser)
     activate_parser = subparsers.add_parser("activate", help="deprecated alias for register")
     add_register_args(activate_parser)
+
+    def add_cluster_init_args(command_parser: argparse.ArgumentParser) -> None:
+        command_parser.add_argument("--output", type=Path, default=None, help="output path; defaults to ~/.plugin_ctl/cluster.toml")
+        command_parser.add_argument("--name", default="local-opentenbase", help="cluster name written to the config")
+        command_parser.add_argument("--ssh-user", default=DEFAULT_SSH_USER, help="SSH user for physical file distribution")
+        command_parser.add_argument("--db-user", default=DEFAULT_DB_USER, help="database user written to node entries")
+        command_parser.add_argument("--database", default=DEFAULT_DATABASE, help="database name written to node entries")
+        command_parser.add_argument("--ssh-port", type=int, default=DEFAULT_SSH_PORT, help="SSH port written to node entries")
+        command_parser.add_argument("--lib-dir", default=DEFAULT_LIB_DIR, help="OpenTenBase library directory")
+        command_parser.add_argument("--extension-dir", default=DEFAULT_EXTENSION_DIR, help="OpenTenBase extension SQL/control directory")
+
+    init_parser = subparsers.add_parser("init", help="discover pgxc_node and write the default cluster.toml")
+    add_cluster_init_args(init_parser)
 
     doctor_parser = subparsers.add_parser("doctor", help="runtime: check local OpenTenBase runtime")
     doctor_parser.add_argument("--container", default="opentenbaseDN1")
@@ -168,14 +198,16 @@ def build_parser() -> argparse.ArgumentParser:
     cluster_parser = subparsers.add_parser("cluster", help="runtime/distributed: inspect OpenTenBase cluster status and topology")
     cluster_subparsers = cluster_parser.add_subparsers(dest="cluster_command", required=True)
     cluster_subparsers.add_parser("status", help="read-only local Docker/OpenTenBase status")
+    cluster_init_parser = cluster_subparsers.add_parser("init", help="discover pgxc_node and write the default cluster.toml")
+    add_cluster_init_args(cluster_init_parser)
     cluster_inspect_parser = cluster_subparsers.add_parser("inspect", help="distributed: inspect a cluster.toml topology")
-    cluster_inspect_parser.add_argument("-f", "--file", type=Path, required=True, help="cluster.toml path")
+    cluster_inspect_parser.add_argument("-f", "--file", type=Path, help="cluster.toml path; defaults to ./cluster.toml or ~/.plugin_ctl/cluster.toml")
     cluster_inspect_parser.add_argument("--json", action="store_true", help="emit topology as JSON")
     cluster_distribute_parser = cluster_subparsers.add_parser("distribute", help="distributed: dry-run or execute physical payload distribution")
     distribute_mode = cluster_distribute_parser.add_mutually_exclusive_group()
     distribute_mode.add_argument("--dry-run", action="store_true", help="build a plan only; do not scp or modify remote nodes")
     distribute_mode.add_argument("--execute", action="store_true", help="execute physical scp distribution and SHA256 verification")
-    cluster_distribute_parser.add_argument("-f", "--file", type=Path, required=True, help="cluster.toml path")
+    cluster_distribute_parser.add_argument("-f", "--file", type=Path, help="cluster.toml path; defaults to ./cluster.toml or ~/.plugin_ctl/cluster.toml")
     cluster_distribute_parser.add_argument("plugin_id")
     cluster_distribute_parser.add_argument("--json", action="store_true", help="emit distribution plan/result as JSON")
 
@@ -224,8 +256,8 @@ def build_parser() -> argparse.ArgumentParser:
     plugins_status_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
 
     command_help = {
-        "deploy": "main flow: deploy locally, or physically distribute with -f cluster.toml",
-        "verify": "lifecycle: verify one plugin package",
+        "deploy": "main flow: deploy plugin payload; uses cluster config for distributed dry-run/execute",
+        "verify": "lifecycle: verify one plugin package; uses cluster config when available",
         "state": "reporting: show local action state",
         "rollback": "lifecycle: rollback one plugin package; dry-run unless --execute is set",
         "report": "reporting: show latest action report",
@@ -236,13 +268,13 @@ def build_parser() -> argparse.ArgumentParser:
             cmd.add_argument("plugin_id", nargs="?")
         if name == "verify":
             cmd.add_argument("--removed", action="store_true", help="verify that plugin objects are absent using removed_probe")
-            cmd.add_argument("-f", "--cluster-file", type=Path, help="cluster.toml path for distributed white-box verification")
+            cmd.add_argument("-f", "--cluster-file", type=Path, help="cluster.toml path; defaults to ./cluster.toml or ~/.plugin_ctl/cluster.toml when present")
             cmd.add_argument("--json", action="store_true", help="with -f, emit distributed verify report as JSON")
         if name == "deploy":
             deploy_mode = cmd.add_mutually_exclusive_group()
             deploy_mode.add_argument("--dry-run", action="store_true", help="with -f, build physical distribution plan only")
             deploy_mode.add_argument("--execute", action="store_true", help="with -f, execute physical file distribution only")
-            cmd.add_argument("-f", "--cluster-file", type=Path, help="cluster.toml path for distributed physical file distribution")
+            cmd.add_argument("-f", "--cluster-file", type=Path, help="cluster.toml path; defaults to ./cluster.toml or ~/.plugin_ctl/cluster.toml when present")
         if name == "rollback":
             cmd.add_argument("--execute", action="store_true", help="execute rollback_sql instead of showing the rollback plan")
         if name == "report":
@@ -302,6 +334,39 @@ def cmd_cluster_status() -> int:
     rows = [[check.name, "yes" if check.ok else "no", check.detail] for check in checks]
     print(render_table(["check", "ok", "detail"], rows))
     return 0 if all(check.ok for check in checks) else 1
+
+
+def cmd_cluster_init(args: argparse.Namespace) -> int:
+    runtime = OpenTenBaseRuntime()
+    config = discover_cluster_config(
+        runtime,
+        name=args.name,
+        ssh_user=args.ssh_user,
+        db_user=args.db_user,
+        database=args.database,
+        ssh_port=args.ssh_port,
+        lib_dir=args.lib_dir,
+        extension_dir=args.extension_dir,
+    )
+    target = write_cluster_config(config, args.output or default_cluster_config_path())
+    print(f"Cluster config initialized: {target}")
+    print(f"Cluster: {config.name}")
+    rows = [
+        [
+            node.name,
+            node.role,
+            node.host,
+            str(node.db_port),
+            node.ssh_user,
+            node.db_user,
+            node.lib_dir,
+            node.extension_dir,
+        ]
+        for node in config.nodes
+    ]
+    print(render_table(["name", "role", "host", "db_port", "ssh_user", "db_user", "lib_dir", "extension_dir"], rows))
+    print("Review host, ssh_user, lib_dir, and extension_dir before running commands with --execute.")
+    return 0
 
 
 def _node_json(node: ClusterNode) -> dict[str, object]:
@@ -1222,18 +1287,22 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "assess":
             return cmd_assess(args.source_path, as_json=args.json)
         if args.command == "register":
-            return cmd_register(args.root, args.plugin_id, args.cluster_file, execute=args.execute, as_json=args.json)
+            return cmd_register(args.root, args.plugin_id, require_cluster_config(args.cluster_file), execute=args.execute, as_json=args.json)
         if args.command == "activate":
-            return cmd_register(args.root, args.plugin_id, args.cluster_file, execute=args.execute, as_json=args.json, deprecated_alias=True)
+            return cmd_register(args.root, args.plugin_id, require_cluster_config(args.cluster_file), execute=args.execute, as_json=args.json, deprecated_alias=True)
+        if args.command == "init":
+            return cmd_cluster_init(args)
         if args.command == "doctor":
             return cmd_doctor(args)
         if args.command == "cluster":
             if args.cluster_command == "status":
                 return cmd_cluster_status()
+            if args.cluster_command == "init":
+                return cmd_cluster_init(args)
             if args.cluster_command == "inspect":
-                return cmd_cluster_inspect(args.file, as_json=args.json)
+                return cmd_cluster_inspect(require_cluster_config(args.file), as_json=args.json)
             if args.cluster_command == "distribute":
-                return cmd_cluster_distribute(args.root, args.file, args.plugin_id, dry_run=args.dry_run, execute=args.execute, as_json=args.json)
+                return cmd_cluster_distribute(args.root, require_cluster_config(args.file), args.plugin_id, dry_run=args.dry_run, execute=args.execute, as_json=args.json)
         if args.command == "plugin":
             if args.plugin_command == "check":
                 return cmd_plugin_check(args.root, args.plugin_id, lang=args.lang)
@@ -1261,8 +1330,9 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_plugins_status(args.root, as_json=args.json, lang=args.lang)
         if args.command == "verify":
             plugin_id = args.plugin_id or "otb_timeseries"
-            if args.cluster_file:
-                return cmd_verify_distributed(args.root, plugin_id, args.cluster_file, as_json=args.json)
+            cluster_file = find_cluster_config(args.cluster_file)
+            if cluster_file:
+                return cmd_verify_distributed(args.root, plugin_id, cluster_file, as_json=args.json)
             return cmd_verify(args.root, plugin_id, removed=args.removed)
         if args.command == "state":
             return cmd_state(args.root, args.plugin_id)
@@ -1270,11 +1340,14 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_report(args.root, as_json=args.json)
         if args.command == "deploy":
             plugin_id = args.plugin_id or "otb_timeseries"
-            if args.cluster_file:
+            cluster_file = find_cluster_config(args.cluster_file)
+            if cluster_file is None and (args.execute or args.dry_run or args.cluster_file):
+                cluster_file = require_cluster_config(args.cluster_file)
+            if cluster_file:
                 return cmd_deploy_physical_distribution(
                     args.root,
                     plugin_id,
-                    args.cluster_file,
+                    cluster_file,
                     dry_run=args.dry_run,
                     execute=args.execute,
                 )

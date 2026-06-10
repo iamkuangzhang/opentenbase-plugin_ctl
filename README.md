@@ -70,56 +70,60 @@ Type "help" to show commands.
 Type "quit" or "exit" to leave.
 
 pluginctl> list
+pluginctl> init
 pluginctl> check pluginctl_smoke_plugin
 pluginctl> deploy pluginctl_smoke_plugin
+pluginctl> register pluginctl_smoke_plugin --execute
 pluginctl> verify pluginctl_smoke_plugin
 pluginctl> report
 pluginctl> quit
 ```
 
-PluginCtl Shell is a plugin lifecycle console. It manages plugin discovery, checks, deployment, verification, rollback, and reports. It does not start, stop, initialize, or monitor an OpenTenBase cluster.
+PluginCtl Shell is a plugin lifecycle console. It manages plugin discovery, checks, deployment, registration, verification, rollback, and reports. `init` only initializes PluginCtl's default `cluster.toml` from a running OpenTenBase cluster. It does not start, stop, initialize, or monitor an OpenTenBase cluster.
 
 ## Distributed Workflow
 
-Copy and edit the topology file:
+Initialize the default topology from a running OpenTenBase cluster:
 
 ```bash
-cp cluster.toml.example cluster.toml
+plugin_ctl init
 ```
 
-Inspect the topology:
+This writes `~/.plugin_ctl/cluster.toml` by reading `pgxc_node` from the current coordinator. Review `host`, `ssh_user`, `lib_dir`, and `extension_dir` before running commands with `--execute`.
+
+Inspect the topology. `-f cluster.toml` is optional; when omitted, PluginCtl uses `./cluster.toml` or `~/.plugin_ctl/cluster.toml`.
 
 ```bash
-plugin_ctl cluster inspect -f cluster.toml
+plugin_ctl cluster inspect
 ```
 
 Preview and execute physical distribution:
 
 ```bash
-plugin_ctl deploy pluginctl_smoke_plugin -f cluster.toml
-plugin_ctl deploy pluginctl_smoke_plugin -f cluster.toml --execute
+plugin_ctl deploy pluginctl_smoke_plugin
+plugin_ctl deploy pluginctl_smoke_plugin --execute
 ```
 
 Preview and execute extension registration:
 
 ```bash
-plugin_ctl register pluginctl_smoke_plugin -f cluster.toml
-plugin_ctl register pluginctl_smoke_plugin -f cluster.toml --execute
+plugin_ctl register pluginctl_smoke_plugin
+plugin_ctl register pluginctl_smoke_plugin --execute
 ```
 
 Verify:
 
 ```bash
-plugin_ctl verify pluginctl_smoke_plugin -f cluster.toml
+plugin_ctl verify pluginctl_smoke_plugin
 plugin_ctl plugin consistency pluginctl_smoke_plugin
 plugin_ctl report
 ```
 
 Important boundaries:
 
-- `deploy -f cluster.toml` is dry-run by default.
-- `deploy -f cluster.toml --execute` distributes files only and does not run `CREATE EXTENSION`.
-- `register -f cluster.toml --execute` runs `CREATE EXTENSION` once on the first coordinator in `cluster.toml`, then checks other coordinators through read-only `pg_extension` queries.
+- `deploy` is dry-run by default when a default cluster config exists.
+- `deploy --execute` distributes files only and does not run `CREATE EXTENSION`.
+- `register --execute` runs `CREATE EXTENSION` once on the first coordinator in `cluster.toml`, then checks other coordinators through read-only `pg_extension` queries.
 - `activate` is kept only as a deprecated compatibility alias for `register`. New documents and scripts should use `register`.
 
 ## Commands
@@ -163,16 +167,17 @@ plugin_ctl verify <plugin_id> --removed
 Distributed plugin governance:
 
 ```bash
-plugin_ctl cluster inspect -f cluster.toml
-plugin_ctl deploy <plugin_id> -f cluster.toml
-plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-plugin_ctl register <plugin_id> -f cluster.toml
-plugin_ctl register <plugin_id> -f cluster.toml --execute
-plugin_ctl verify <plugin_id> -f cluster.toml
+plugin_ctl init
+plugin_ctl cluster inspect
+plugin_ctl deploy <plugin_id>
+plugin_ctl deploy <plugin_id> --execute
+plugin_ctl register <plugin_id>
+plugin_ctl register <plugin_id> --execute
+plugin_ctl verify <plugin_id>
 plugin_ctl plugin roles <plugin_id>
 plugin_ctl plugin consistency <plugin_id>
-plugin_ctl cluster distribute <plugin_id> -f cluster.toml --dry-run
-plugin_ctl cluster distribute <plugin_id> -f cluster.toml --execute
+plugin_ctl cluster distribute <plugin_id> --dry-run
+plugin_ctl cluster distribute <plugin_id> --execute
 ```
 
 Archive and reporting:
@@ -212,13 +217,13 @@ cluster.toml.example   distributed topology example
 
 ## Safety Boundary
 
-Read-only or mostly read-only commands include `list`, `inspect`, `assess`, `plugin lint`, `plugin plan`, `plugin precheck`, `plugin diagnose`, `plugin roles`, `plugin consistency`, `plugin archive list`, `plugin archive inspect`, `plugins status`, `verify -f`, and `report`.
+Read-only or mostly read-only commands include `list`, `inspect`, `assess`, `plugin lint`, `plugin plan`, `plugin precheck`, `plugin diagnose`, `plugin roles`, `plugin consistency`, `plugin archive list`, `plugin archive inspect`, `plugins status`, `verify`, and `report`.
 
 Commands that can modify the database or filesystem:
 
-- `deploy <plugin_id>` runs local install SQL.
-- `deploy <plugin_id> -f cluster.toml --execute` copies remote files through `scp`.
-- `register <plugin_id> -f cluster.toml --execute` runs `CREATE EXTENSION` on the primary coordinator.
+- `init` writes PluginCtl's default cluster config by reading `pgxc_node`; it does not start or stop OpenTenBase.
+- `deploy <plugin_id> --execute` copies remote files through `scp` when a cluster config exists.
+- `register <plugin_id> --execute` runs `CREATE EXTENSION` on the primary coordinator.
 - `rollback <plugin_id> --execute` runs manifest-declared rollback SQL.
 
 Role hooks are currently planned and displayed only. They are not automatically executed.

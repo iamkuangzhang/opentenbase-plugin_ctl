@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from plugin_ctl.cluster import load_cluster_config, run_cluster_status
+from plugin_ctl.cluster import discover_cluster_config, load_cluster_config, render_cluster_config, run_cluster_status
 
 
 class MockRuntime:
@@ -192,6 +192,24 @@ lib_dir = "/opt/otb/lib"
         )
         with self.assertRaisesRegex(ValueError, "extension_dir"):
             load_cluster_config(missing_dir)
+
+    def test_discover_cluster_config_from_pgxc_node(self) -> None:
+        config = discover_cluster_config(MockRuntime("opentenbaseDN1"))
+
+        self.assertEqual(config.name, "local-opentenbase")
+        self.assertEqual([node.name for node in config.coordinators], ["cn001", "cn002"])
+        self.assertEqual([node.name for node in config.datanodes], ["dn001", "dn002"])
+        self.assertEqual(config.coordinators[0].db_port, 30004)
+        self.assertEqual(config.datanodes[0].role, "dn")
+
+    def test_render_cluster_config_can_be_loaded_back(self) -> None:
+        config = discover_cluster_config(MockRuntime("opentenbaseDN1"), name="roundtrip")
+        path = self.write_config(render_cluster_config(config))
+
+        loaded = load_cluster_config(path)
+
+        self.assertEqual(loaded.name, "roundtrip")
+        self.assertEqual(len(loaded.nodes), 4)
 
 
 if __name__ == "__main__":

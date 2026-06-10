@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -195,6 +196,24 @@ payload:
         self.assertIn("Activate: skipped", output)
         self.assertIn("CREATE EXTENSION: not executed", output)
         self.assertIn("Result: OK", output)
+
+    def test_deploy_uses_default_cluster_config_when_file_is_omitted(self) -> None:
+        fake = FakeRemoteExecutor()
+        with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(self.cluster_file)}):
+            with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
+                code, output = self._run(["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "--execute"])
+
+        self.assertEqual(code, 0)
+        self.assertTrue(fake.copies)
+        self.assertIn("Mode: execute", output)
+        self.assertIn("Physical distribution: executed", output)
+
+    def test_deploy_execute_requires_cluster_config(self) -> None:
+        missing_default = str(Path(self.tempdir.name) / "missing.toml")
+        with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": missing_default}):
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    main(["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "--execute"])
 
     def test_deploy_rejects_dry_run_and_execute_together(self) -> None:
         with redirect_stderr(io.StringIO()):

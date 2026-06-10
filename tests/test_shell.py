@@ -142,7 +142,9 @@ class PluginCtlShellTest(unittest.TestCase):
 
     def test_shell_command_translation(self) -> None:
         self.assertEqual(translate_shell_command(["list"]), ["list"])
+        self.assertEqual(translate_shell_command(["init"]), ["cluster", "init"])
         self.assertEqual(translate_shell_command(["diagnose", "pluginctl_smoke_plugin"]), ["plugin", "diagnose", "pluginctl_smoke_plugin"])
+        self.assertEqual(translate_shell_command(["register", "pluginctl_smoke_plugin"]), ["register", "pluginctl_smoke_plugin"])
         self.assertIsNone(translate_shell_command(["start", "all"]))
 
     def test_system_exit_does_not_leave_shell(self) -> None:

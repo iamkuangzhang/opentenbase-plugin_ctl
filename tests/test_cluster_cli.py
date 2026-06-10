@@ -2,6 +2,8 @@
 
 import io
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -81,6 +83,35 @@ class ClusterCliTest(unittest.TestCase):
         self.assertEqual(payload["errors"], [])
         self.assertEqual(payload["coordinators"][0]["name"], "cn001")
         self.assertEqual(payload["datanodes"][0]["role"], "dn")
+
+    def test_cluster_init_writes_default_config_from_pgxc_node(self) -> None:
+        output_file = Path(self.tempdir.name) / "generated.toml"
+        with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeInitRuntime()):
+            code, output = self._run(["cluster", "init", "--output", str(output_file)])
+
+        self.assertEqual(code, 0)
+        self.assertTrue(output_file.exists())
+        self.assertIn("Cluster config initialized:", output)
+        self.assertIn("cn001", output)
+        self.assertIn("dn001", output)
+
+    def test_top_level_init_alias_writes_config(self) -> None:
+        output_file = Path(self.tempdir.name) / "top-level-generated.toml"
+        with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeInitRuntime()):
+            code, output = self._run(["init", "--output", str(output_file)])
+
+        self.assertEqual(code, 0)
+        self.assertTrue(output_file.exists())
+        self.assertIn("Cluster config initialized:", output)
+
+    def test_cluster_inspect_uses_default_config_when_file_is_omitted(self) -> None:
+        default_file = Path(self.tempdir.name) / "default-cluster.toml"
+        default_file.write_text(CLUSTER_TOML, encoding="utf-8")
+        with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(default_file)}):
+            code, output = self._run(["cluster", "inspect"])
+
+        self.assertEqual(code, 0)
+        self.assertIn("Cluster: m3-test", output)
 
     def test_cluster_distribute_dry_run_json_uses_manifest_payload_without_scp(self) -> None:
         code, output = self._run(
@@ -311,6 +342,18 @@ class FakeRemoteExecutor:
             stdout=f"{digest}  {remote_path}\n",
             stderr="",
         )
+
+
+class FakeInitRuntime:
+    def run_sql(self, sql: str) -> subprocess.CompletedProcess[str]:
+        if "FROM pgxc_node" in sql:
+            return subprocess.CompletedProcess(
+                args=["psql"],
+                returncode=0,
+                stdout="cn001|C|127.0.0.1|30004\ndn001|D|127.0.0.1|20008\n",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(args=["psql"], returncode=1, stdout="", stderr="unexpected sql")
 
 
 if __name__ == "__main__":

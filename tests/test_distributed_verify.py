@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -212,8 +213,10 @@ class DistributedVerifyCliTest(unittest.TestCase):
             def run_sql(self, sql: str) -> subprocess.CompletedProcess[str]:
                 return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="ok\n", stderr="")
 
-        with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=Runtime()):
-            code, output = self._run(["--root", str(self.root), "verify", "pluginctl_smoke_plugin"])
+        missing_default = str(Path(self.tempdir.name) / "missing.toml")
+        with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": missing_default}):
+            with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=Runtime()):
+                code, output = self._run(["--root", str(self.root), "verify", "pluginctl_smoke_plugin"])
 
         self.assertEqual(code, 0)
         self.assertIn("smoke verify passed", output)
@@ -227,6 +230,16 @@ class DistributedVerifyCliTest(unittest.TestCase):
         self.assertIn("Mode: distributed-verify", output)
         self.assertIn("Coordinator extension check:", output)
         self.assertIn("Prepared transaction scan:", output)
+        self.assertIn("Result: OK", output)
+
+    def test_verify_uses_default_cluster_config_when_file_is_omitted(self) -> None:
+        with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(self.cluster_file)}):
+            with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=FakeSqlExecutor()):
+                with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=FakeRemoteExecutor(self.root)):
+                    code, output = self._run(["--root", str(self.root), "verify", "pluginctl_smoke_plugin"])
+
+        self.assertEqual(code, 0)
+        self.assertIn("Mode: distributed-verify", output)
         self.assertIn("Result: OK", output)
 
     def test_verify_json_shape_is_stable(self) -> None:
