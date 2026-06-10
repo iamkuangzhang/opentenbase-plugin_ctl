@@ -1,4 +1,4 @@
-﻿# otb_timeseries Chunk Distribution Warning
+# otb_timeseries Chunk Distribution Warning
 
 ## Status
 
@@ -13,7 +13,7 @@ Run the M0 smoke verification:
 ```powershell
 cd "plugin_ctl for OpenTenBase/platform"
 $env:PYTHONPATH = 'src'
-python -m plugin_ctl verify otb_timeseries
+plugin_ctl verify otb_timeseries
 ```
 
 The smoke recipe creates a temporary table, calls `otb_ts.create_hypertable`,

@@ -1,4 +1,4 @@
-﻿# v0.1.0 Release Checklist
+# v0.1.0 Release Checklist
 
 ## Documentation
 
@@ -17,8 +17,7 @@
 - [x] Runtime dependency `PyYAML>=6.0` is declared.
 - [x] Editable install works with `python -m pip install -e .`.
 - [x] Console script `plugin_ctl` is declared.
-- [x] Project-name aliases `opentenbase-pluginctl` and `opentenbase-plugin_ctl` are retained.
-- [x] `python -m plugin_ctl` remains supported.
+- [x] `plugin_ctl` remains supported.
 
 ## Packaging Strategy
 
@@ -64,23 +63,23 @@ Run before tagging:
 
 ```bash
 python -m unittest discover -s tests -v
-python -m plugin_ctl list
 plugin_ctl list
-python -m plugin_ctl plugin diagnose pluginctl_smoke_plugin
-python -m plugin_ctl plugin consistency pluginctl_smoke_plugin
-python -m plugin_ctl plugins status
+plugin_ctl list
+plugin_ctl plugin diagnose pluginctl_smoke_plugin
+plugin_ctl plugin consistency pluginctl_smoke_plugin
+plugin_ctl plugins status
 ```
 
 If local OpenTenBase is available, optionally run:
 
 ```bash
-python -m plugin_ctl plugin precheck pluginctl_smoke_plugin
-python -m plugin_ctl deploy pluginctl_smoke_plugin
-python -m plugin_ctl verify pluginctl_smoke_plugin
-python -m plugin_ctl rollback pluginctl_smoke_plugin
-python -m plugin_ctl rollback pluginctl_smoke_plugin --execute
-python -m plugin_ctl verify pluginctl_smoke_plugin --removed
-python -m plugin_ctl report
+plugin_ctl plugin precheck pluginctl_smoke_plugin
+plugin_ctl deploy pluginctl_smoke_plugin
+plugin_ctl verify pluginctl_smoke_plugin
+plugin_ctl rollback pluginctl_smoke_plugin
+plugin_ctl rollback pluginctl_smoke_plugin --execute
+plugin_ctl verify pluginctl_smoke_plugin --removed
+plugin_ctl report
 ```
 
 Latest local validation also completed the `pluginctl_smoke_plugin` deploy, verify, rollback dry-run, rollback execute, removed verify, and report flow.

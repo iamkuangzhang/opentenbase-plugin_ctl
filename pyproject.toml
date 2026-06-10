@@ -16,8 +16,6 @@ dependencies = [
 
 [project.scripts]
 plugin_ctl = "plugin_ctl.cli:main"
-opentenbase-pluginctl = "plugin_ctl.cli:main"
-opentenbase-plugin_ctl = "plugin_ctl.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

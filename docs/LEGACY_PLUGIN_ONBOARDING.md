@@ -1,4 +1,4 @@
-﻿# Legacy Plugin Onboarding
+# Legacy Plugin Onboarding
 
 ## Scope
 
@@ -63,22 +63,22 @@ No legacy plugin currently declares `rollback_sql` or `removed_probe`. This is i
 Run discovery:
 
 ```bash
-python -m plugin_ctl list
-python -m plugin_ctl plugins status
+plugin_ctl list
+plugin_ctl plugins status
 ```
 
 Run one plugin governance check:
 
 ```bash
-python -m plugin_ctl plugin lint otb_health
-python -m plugin_ctl plugin plan otb_health
-python -m plugin_ctl plugin diagnose otb_health
+plugin_ctl plugin lint otb_health
+plugin_ctl plugin plan otb_health
+plugin_ctl plugin diagnose otb_health
 ```
 
 Run lightweight smoke verification only when the plugin is already installed:
 
 ```bash
-python -m plugin_ctl verify otb_health
+plugin_ctl verify otb_health
 ```
 
 ## Current Real Environment Result

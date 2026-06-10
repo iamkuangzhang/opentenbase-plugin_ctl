@@ -20,8 +20,8 @@ class CliProductTest(unittest.TestCase):
         self.assertIn('name = "opentenbase-plugin_ctl"', pyproject)
         self.assertIn('requires-python = ">=3.11"', pyproject)
         self.assertIn('plugin_ctl = "plugin_ctl.cli:main"', pyproject)
-        self.assertIn('opentenbase-pluginctl = "plugin_ctl.cli:main"', pyproject)
-        self.assertIn('opentenbase-plugin_ctl = "plugin_ctl.cli:main"', pyproject)
+        self.assertNotIn("opentenbase-" + "pluginctl", pyproject)
+        self.assertNotIn("opentenbase_" + "plugin_ctl", pyproject)
 
 
 if __name__ == "__main__":

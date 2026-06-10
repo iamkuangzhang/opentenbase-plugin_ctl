@@ -1,4 +1,4 @@
-﻿# M1 otb_timeseries Clean Deploy Plan
+# M1 otb_timeseries Clean Deploy Plan
 
 ## Current Constraint
 
@@ -6,7 +6,7 @@ The current verified Docker cluster already has `otb_timeseries` installed in
 the working `postgres` database. Running:
 
 ```powershell
-python -m plugin_ctl deploy otb_timeseries
+plugin_ctl deploy otb_timeseries
 ```
 
 therefore exercises the safe installed-probe path:
@@ -26,8 +26,8 @@ repeatable:
 1. Start a fresh OpenTenBase Docker topology.
 2. Confirm `plugin_ctl cluster status` is green.
 3. Confirm `SELECT otb_ts.version();` fails before deploy.
-4. Run `python -m plugin_ctl deploy otb_timeseries`.
-5. Run `python -m plugin_ctl verify otb_timeseries`.
+4. Run `plugin_ctl deploy otb_timeseries`.
+5. Run `plugin_ctl verify otb_timeseries`.
 6. Preserve logs and `plugin_ctl report --json`.
 7. Tear down the temporary environment.
 

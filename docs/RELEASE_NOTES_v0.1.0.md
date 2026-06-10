@@ -1,4 +1,4 @@
-﻿# OpenTenBase PluginCtl v0.1.0
+# OpenTenBase PluginCtl v0.1.0
 
 ## Title
 
@@ -13,7 +13,7 @@ This release focuses on plugin package governance, not general cluster operation
 ## Highlights
 
 - Primary console script: `plugin_ctl`
-- Compatibility entrypoints: `plugin_ctl`, `python -m plugin_ctl`, `opentenbase-pluginctl`, `opentenbase-plugin_ctl`
+- Command entrypoint: `plugin_ctl`
 - Safe sample plugin: `pluginctl_smoke_plugin`
 - Reference manifest for real plugin: `otb_timeseries`
 - Governance flow: `lint -> plan -> precheck -> diagnose -> deploy -> verify -> report`
@@ -32,14 +32,14 @@ plugin_ctl list
 ## Five-Minute Trial
 
 ```bash
-python -m plugin_ctl list
-python -m plugin_ctl plugin lint pluginctl_smoke_plugin
-python -m plugin_ctl plugin plan pluginctl_smoke_plugin
-python -m plugin_ctl plugin precheck pluginctl_smoke_plugin
-python -m plugin_ctl deploy pluginctl_smoke_plugin
-python -m plugin_ctl verify pluginctl_smoke_plugin
-python -m plugin_ctl plugin diagnose pluginctl_smoke_plugin
-python -m plugin_ctl report
+plugin_ctl list
+plugin_ctl plugin lint pluginctl_smoke_plugin
+plugin_ctl plugin plan pluginctl_smoke_plugin
+plugin_ctl plugin precheck pluginctl_smoke_plugin
+plugin_ctl deploy pluginctl_smoke_plugin
+plugin_ctl verify pluginctl_smoke_plugin
+plugin_ctl plugin diagnose pluginctl_smoke_plugin
+plugin_ctl report
 ```
 
 ## Known Limitations
@@ -58,9 +58,9 @@ Validated with:
 
 ```bash
 python -m unittest discover -s tests -v
-python -m plugin_ctl list
 plugin_ctl list
-python -m plugin_ctl plugin diagnose pluginctl_smoke_plugin
-python -m plugin_ctl plugin consistency pluginctl_smoke_plugin
-python -m plugin_ctl plugins status
+plugin_ctl list
+plugin_ctl plugin diagnose pluginctl_smoke_plugin
+plugin_ctl plugin consistency pluginctl_smoke_plugin
+plugin_ctl plugins status
 ```

@@ -1,4 +1,4 @@
-﻿# M0 Baseline
+# M0 Baseline
 
 This file freezes the current runnable baseline for the plugin_ctl OpenTenBase
 platform layer. M1 work should keep these commands and expectations intact.
@@ -58,14 +58,14 @@ Run from this directory:
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python -m plugin_ctl list
-python -m plugin_ctl inspect otb_timeseries
-python -m plugin_ctl doctor
-python -m plugin_ctl deploy otb_timeseries
-python -m plugin_ctl verify otb_timeseries
-python -m plugin_ctl state otb_timeseries
-python -m plugin_ctl report
-python -m plugin_ctl rollback otb_timeseries
+plugin_ctl list
+plugin_ctl inspect otb_timeseries
+plugin_ctl doctor
+plugin_ctl deploy otb_timeseries
+plugin_ctl verify otb_timeseries
+plugin_ctl state otb_timeseries
+plugin_ctl report
+plugin_ctl rollback otb_timeseries
 ```
 
 Expected M0 behavior:

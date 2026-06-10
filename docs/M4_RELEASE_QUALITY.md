@@ -1,4 +1,4 @@
-﻿# M4 Release Quality
+# M4 Release Quality
 
 ## 目标
 
@@ -11,32 +11,32 @@ M4 第一阶段目标是让 OpenTenBase PluginCtl 达到“可以给别人安装
 只读命令：
 
 ```bash
-python -m plugin_ctl list
-python -m plugin_ctl inspect <plugin_id>
-python -m plugin_ctl plugin lint <plugin_id>
-python -m plugin_ctl plugin plan <plugin_id>
-python -m plugin_ctl plugin precheck <plugin_id>
-python -m plugin_ctl plugin diagnose <plugin_id>
-python -m plugin_ctl plugin status <plugin_id>
-python -m plugin_ctl plugin check <plugin_id>
-python -m plugin_ctl plugin roles <plugin_id>
-python -m plugin_ctl plugin consistency <plugin_id>
-python -m plugin_ctl plugin archive list
-python -m plugin_ctl plugin archive inspect <plugin_id>
-python -m plugin_ctl plugins status
-python -m plugin_ctl doctor
-python -m plugin_ctl cluster status
-python -m plugin_ctl report
-python -m plugin_ctl state <plugin_id>
+plugin_ctl list
+plugin_ctl inspect <plugin_id>
+plugin_ctl plugin lint <plugin_id>
+plugin_ctl plugin plan <plugin_id>
+plugin_ctl plugin precheck <plugin_id>
+plugin_ctl plugin diagnose <plugin_id>
+plugin_ctl plugin status <plugin_id>
+plugin_ctl plugin check <plugin_id>
+plugin_ctl plugin roles <plugin_id>
+plugin_ctl plugin consistency <plugin_id>
+plugin_ctl plugin archive list
+plugin_ctl plugin archive inspect <plugin_id>
+plugin_ctl plugins status
+plugin_ctl doctor
+plugin_ctl cluster status
+plugin_ctl report
+plugin_ctl state <plugin_id>
 ```
 
 会修改数据库或本地状态的命令：
 
 ```bash
-python -m plugin_ctl deploy <plugin_id>
-python -m plugin_ctl verify <plugin_id>
-python -m plugin_ctl rollback <plugin_id> --execute
-python -m plugin_ctl verify <plugin_id> --removed
+plugin_ctl deploy <plugin_id>
+plugin_ctl verify <plugin_id>
+plugin_ctl rollback <plugin_id> --execute
+plugin_ctl verify <plugin_id> --removed
 ```
 
 说明：
@@ -67,8 +67,8 @@ python -m plugin_ctl verify <plugin_id> --removed
 当前不会自动执行 hook。未来如果支持执行，必须引入显式参数，例如：
 
 ```bash
-python -m plugin_ctl deploy <plugin_id> --execute-hooks
-python -m plugin_ctl rollback <plugin_id> --execute --execute-hooks
+plugin_ctl deploy <plugin_id> --execute-hooks
+plugin_ctl rollback <plugin_id> --execute --execute-hooks
 ```
 
 在没有显式参数前，hook 只能作为治理计划和一致性检查的一部分。
@@ -143,14 +143,14 @@ plugin_ctl list
 
 ```bash
 set PYTHONPATH=src
-python -m plugin_ctl list
+plugin_ctl list
 ```
 
 PowerShell：
 
 ```powershell
 $env:PYTHONPATH = "src"
-python -m plugin_ctl list
+plugin_ctl list
 ```
 
 ## 本地 OpenTenBase Docker 连接
@@ -166,29 +166,29 @@ python -m plugin_ctl list
 可先运行：
 
 ```bash
-python -m plugin_ctl doctor
-python -m plugin_ctl cluster status
+plugin_ctl doctor
+plugin_ctl cluster status
 ```
 
 ## 5 分钟试用流程
 
 ```bash
-python -m plugin_ctl list
-python -m plugin_ctl plugin lint pluginctl_smoke_plugin
-python -m plugin_ctl plugin plan pluginctl_smoke_plugin
-python -m plugin_ctl plugin precheck pluginctl_smoke_plugin
-python -m plugin_ctl deploy pluginctl_smoke_plugin
-python -m plugin_ctl verify pluginctl_smoke_plugin
-python -m plugin_ctl plugin diagnose pluginctl_smoke_plugin
-python -m plugin_ctl report
+plugin_ctl list
+plugin_ctl plugin lint pluginctl_smoke_plugin
+plugin_ctl plugin plan pluginctl_smoke_plugin
+plugin_ctl plugin precheck pluginctl_smoke_plugin
+plugin_ctl deploy pluginctl_smoke_plugin
+plugin_ctl verify pluginctl_smoke_plugin
+plugin_ctl plugin diagnose pluginctl_smoke_plugin
+plugin_ctl report
 ```
 
 如需回滚样例插件：
 
 ```bash
-python -m plugin_ctl rollback pluginctl_smoke_plugin
-python -m plugin_ctl rollback pluginctl_smoke_plugin --execute
-python -m plugin_ctl verify pluginctl_smoke_plugin --removed
+plugin_ctl rollback pluginctl_smoke_plugin
+plugin_ctl rollback pluginctl_smoke_plugin --execute
+plugin_ctl verify pluginctl_smoke_plugin --removed
 ```
 
 ## 插件说明

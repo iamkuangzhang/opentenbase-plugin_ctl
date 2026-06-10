@@ -1,4 +1,4 @@
-﻿# M3 Final Status
+# M3 Final Status
 
 ## Freeze Conclusion
 
@@ -7,20 +7,17 @@ M3 is frozen as a distributed plugin lifecycle baseline.
 The frozen main flow is:
 
 ```bash
-python -m plugin_ctl check <plugin_id>
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl activate <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl verify <plugin_id> -f cluster.toml
-python -m plugin_ctl report
+plugin_ctl check <plugin_id>
+plugin_ctl deploy <plugin_id> -f cluster.toml --execute
+plugin_ctl activate <plugin_id> -f cluster.toml --execute
+plugin_ctl verify <plugin_id> -f cluster.toml
+plugin_ctl report
 ```
 
 Supported entrypoints:
 
 ```bash
-python -m plugin_ctl ...
 plugin_ctl ...
-opentenbase-pluginctl ...
-opentenbase-plugin_ctl ...
 ```
 
 ## Implemented M3 Capabilities
@@ -82,22 +79,22 @@ M2 Docker sandbox behavior remains intact:
 Retained commands:
 
 ```bash
-python -m plugin_ctl plugin lint <plugin_id>
-python -m plugin_ctl plugin plan <plugin_id>
-python -m plugin_ctl plugin precheck <plugin_id>
-python -m plugin_ctl plugin diagnose <plugin_id>
-python -m plugin_ctl plugin check <plugin_id>
-python -m plugin_ctl plugin status <plugin_id>
-python -m plugin_ctl plugin roles <plugin_id>
-python -m plugin_ctl plugin consistency <plugin_id>
-python -m plugin_ctl plugin archive list
-python -m plugin_ctl plugin archive inspect <plugin_id>
-python -m plugin_ctl plugins status
-python -m plugin_ctl cluster inspect -f cluster.toml
-python -m plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
-python -m plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>
-python -m plugin_ctl cluster status
-python -m plugin_ctl doctor
+plugin_ctl plugin lint <plugin_id>
+plugin_ctl plugin plan <plugin_id>
+plugin_ctl plugin precheck <plugin_id>
+plugin_ctl plugin diagnose <plugin_id>
+plugin_ctl plugin check <plugin_id>
+plugin_ctl plugin status <plugin_id>
+plugin_ctl plugin roles <plugin_id>
+plugin_ctl plugin consistency <plugin_id>
+plugin_ctl plugin archive list
+plugin_ctl plugin archive inspect <plugin_id>
+plugin_ctl plugins status
+plugin_ctl cluster inspect -f cluster.toml
+plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
+plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>
+plugin_ctl cluster status
+plugin_ctl doctor
 ```
 
 ## Security Boundary

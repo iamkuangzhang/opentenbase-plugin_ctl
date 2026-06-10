@@ -1,16 +1,16 @@
-﻿# M3 Distributed Lifecycle
+# M3 Distributed Lifecycle
 
 ## Purpose
 
 M3 freezes the distributed OpenTenBase plugin lifecycle around the following main flow:
 
 ```bash
-python -m plugin_ctl assess ./pg_extension_source/
-python -m plugin_ctl check <plugin_id>
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl register <plugin_id> -f cluster.toml --execute
-python -m plugin_ctl verify <plugin_id> -f cluster.toml
-python -m plugin_ctl report
+plugin_ctl assess ./pg_extension_source/
+plugin_ctl check <plugin_id>
+plugin_ctl deploy <plugin_id> -f cluster.toml --execute
+plugin_ctl register <plugin_id> -f cluster.toml --execute
+plugin_ctl verify <plugin_id> -f cluster.toml
+plugin_ctl report
 ```
 
 The goal is to make plugin delivery explicit and auditable:
@@ -63,8 +63,8 @@ The tool does not treat `cluster.toml` as untrusted user input.
 ## Step 0: assess
 
 ```bash
-python -m plugin_ctl assess ./pg_extension_source/
-python -m plugin_ctl assess ./pg_extension_source/ --json
+plugin_ctl assess ./pg_extension_source/
+plugin_ctl assess ./pg_extension_source/ --json
 ```
 
 `assess` statically scans a PostgreSQL extension source tree for OpenTenBase migration risks. It does not compile code, connect to OpenTenBase, or modify files.
@@ -74,7 +74,7 @@ The MVP checks `.control` files, SQL/C source presence, `LANGUAGE C` functions w
 ## Step 1: check
 
 ```bash
-python -m plugin_ctl check <plugin_id>
+plugin_ctl check <plugin_id>
 ```
 
 `check` aggregates:
@@ -91,13 +91,13 @@ It is intended as a single pre-flight gate for users. It does not execute deploy
 Dry-run:
 
 ```bash
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml
+plugin_ctl deploy <plugin_id> -f cluster.toml
 ```
 
 Execute:
 
 ```bash
-python -m plugin_ctl deploy <plugin_id> -f cluster.toml --execute
+plugin_ctl deploy <plugin_id> -f cluster.toml --execute
 ```
 
 Distributed deploy currently means physical payload distribution only:
@@ -115,13 +115,13 @@ It does not run `CREATE EXTENSION`.
 Dry-run:
 
 ```bash
-python -m plugin_ctl register <plugin_id> -f cluster.toml
+plugin_ctl register <plugin_id> -f cluster.toml
 ```
 
 Execute:
 
 ```bash
-python -m plugin_ctl register <plugin_id> -f cluster.toml --execute
+plugin_ctl register <plugin_id> -f cluster.toml --execute
 ```
 
 Registration behavior:
@@ -142,8 +142,8 @@ There is no automatic rollback of already registered metadata in M3.
 ## Step 4: verify -f
 
 ```bash
-python -m plugin_ctl verify <plugin_id> -f cluster.toml
-python -m plugin_ctl verify <plugin_id> -f cluster.toml --json
+plugin_ctl verify <plugin_id> -f cluster.toml
+plugin_ctl verify <plugin_id> -f cluster.toml --json
 ```
 
 Distributed verify is read-only.
@@ -167,8 +167,8 @@ Prepared transaction residue is reported as a risk requiring manual confirmation
 ## Step 5: report
 
 ```bash
-python -m plugin_ctl report
-python -m plugin_ctl report --json
+plugin_ctl report
+plugin_ctl report --json
 ```
 
 `report` shows local action state recorded by the CLI. It is not a replacement for database truth. Use `verify -f` for live distributed state verification.
@@ -178,14 +178,14 @@ python -m plugin_ctl report --json
 The following commands remain available for lower-level troubleshooting:
 
 ```bash
-python -m plugin_ctl plugin lint <plugin_id>
-python -m plugin_ctl plugin plan <plugin_id>
-python -m plugin_ctl plugin precheck <plugin_id>
-python -m plugin_ctl plugin diagnose <plugin_id>
-python -m plugin_ctl assess ./pg_extension_source/
-python -m plugin_ctl cluster inspect -f cluster.toml
-python -m plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
-python -m plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>
+plugin_ctl plugin lint <plugin_id>
+plugin_ctl plugin plan <plugin_id>
+plugin_ctl plugin precheck <plugin_id>
+plugin_ctl plugin diagnose <plugin_id>
+plugin_ctl assess ./pg_extension_source/
+plugin_ctl cluster inspect -f cluster.toml
+plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
+plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>
 ```
 
 They are not removed or replaced by the main flow.

@@ -1,4 +1,4 @@
-﻿# M2 Plugin Governance
+# M2 Plugin Governance
 
 ## Direction
 
@@ -20,14 +20,14 @@ plugin_ctl is not an OpenTenBase cluster inspection platform. It should answer:
 Single-plugin governance check:
 
 ```powershell
-python -m plugin_ctl plugin check <plugin_id>
+plugin_ctl plugin check <plugin_id>
 ```
 
 Package lint, without any database connection:
 
 ```powershell
-python -m plugin_ctl plugin lint <plugin_id>
-python -m plugin_ctl plugin lint <plugin_id> --json
+plugin_ctl plugin lint <plugin_id>
+plugin_ctl plugin lint <plugin_id> --json
 ```
 
 `lint` returns `pass`, `warn`, and `fail` items. `fail` means the package is not
@@ -39,8 +39,8 @@ its governance surface is incomplete, such as missing `rollback_sql`,
 Non-executing lifecycle plan:
 
 ```powershell
-python -m plugin_ctl plugin plan <plugin_id>
-python -m plugin_ctl plugin plan <plugin_id> --json
+plugin_ctl plugin plan <plugin_id>
+plugin_ctl plugin plan <plugin_id> --json
 ```
 
 `plan` explains what deploy, verify, rollback, and removed-verification would do.
@@ -51,8 +51,8 @@ rollback, or removed-probe SQL.
 Read-only pre-deploy checks:
 
 ```powershell
-python -m plugin_ctl plugin precheck <plugin_id>
-python -m plugin_ctl plugin precheck <plugin_id> --json
+plugin_ctl plugin precheck <plugin_id>
+plugin_ctl plugin precheck <plugin_id> --json
 ```
 
 `precheck` is a deploy gate, not a deployment command. It checks package lint
@@ -63,8 +63,8 @@ remote staging parent. It does not copy files and does not execute lifecycle SQL
 Aggregated diagnosis:
 
 ```powershell
-python -m plugin_ctl plugin diagnose <plugin_id>
-python -m plugin_ctl plugin diagnose <plugin_id> --json
+plugin_ctl plugin diagnose <plugin_id>
+plugin_ctl plugin diagnose <plugin_id> --json
 ```
 
 `diagnose` aggregates `lint`, `plan`, and `precheck` into one user-facing
@@ -75,17 +75,17 @@ what the main risk is.
 Multi-plugin governance status:
 
 ```powershell
-python -m plugin_ctl plugin status <plugin_id>
-python -m plugin_ctl plugins status
-python -m plugin_ctl plugins status --json
+plugin_ctl plugin status <plugin_id>
+plugin_ctl plugins status
+plugin_ctl plugins status --json
 ```
 
 Human output supports Chinese, English, or bilingual labels:
 
 ```powershell
-python -m plugin_ctl plugin status otb_timeseries --lang zh
-python -m plugin_ctl plugin status otb_timeseries --lang en
-python -m plugin_ctl plugin status otb_timeseries --lang both
+plugin_ctl plugin status otb_timeseries --lang zh
+plugin_ctl plugin status otb_timeseries --lang en
+plugin_ctl plugin status otb_timeseries --lang both
 ```
 
 JSON output keeps English keys to remain stable for automation.

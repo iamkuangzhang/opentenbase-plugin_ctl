@@ -1,4 +1,4 @@
-﻿# M3 Archive And Consistency
+# M3 Archive And Consistency
 
 ## Positioning
 
@@ -77,8 +77,8 @@ It checks:
 Commands:
 
 ```bash
-python -m plugin_ctl plugin consistency <plugin_id>
-python -m plugin_ctl plugin consistency <plugin_id> --json
+plugin_ctl plugin consistency <plugin_id>
+plugin_ctl plugin consistency <plugin_id> --json
 ```
 
 The command can return warnings or failures, but it never repairs state automatically.

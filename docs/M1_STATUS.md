@@ -1,4 +1,4 @@
-﻿# M1 Status
+# M1 Status
 
 ## Completed
 
@@ -42,15 +42,15 @@ The M1 local verification sequence is:
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python -m plugin_ctl cluster status
-python -m plugin_ctl deploy pluginctl_smoke_plugin
-python -m plugin_ctl verify pluginctl_smoke_plugin
-python -m plugin_ctl rollback pluginctl_smoke_plugin --execute
-python -m plugin_ctl verify pluginctl_smoke_plugin --removed
-python -m plugin_ctl deploy otb_timeseries
-python -m plugin_ctl verify otb_timeseries
-python -m plugin_ctl report
-python -m plugin_ctl report --json
+plugin_ctl cluster status
+plugin_ctl deploy pluginctl_smoke_plugin
+plugin_ctl verify pluginctl_smoke_plugin
+plugin_ctl rollback pluginctl_smoke_plugin --execute
+plugin_ctl verify pluginctl_smoke_plugin --removed
+plugin_ctl deploy otb_timeseries
+plugin_ctl verify otb_timeseries
+plugin_ctl report
+plugin_ctl report --json
 ```
 
 ## Limitations
