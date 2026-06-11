@@ -34,7 +34,7 @@ def rollback_plugin(runtime: OpenTenBaseRuntime, manifest: PluginManifest, *, ex
             action="rollback",
             plugin_id=manifest.plugin_id,
             ok=True,
-            detail="rollback plan ready; rerun with --execute to apply",
+            detail="rollback plan ready; rerun without --dry-run to apply",
             returncode=0,
             stdout=rollback_sql.read_text(encoding="utf-8").strip(),
             metadata={"stage": "plan", "rollback_sql": str(rollback_sql), "execute": False, "dry_run": True},

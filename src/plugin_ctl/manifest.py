@@ -65,13 +65,15 @@ class PluginManifest:
     def project_root(self) -> Path:
         if self.path is None:
             raise ManifestError("manifest path is not attached")
-        for parent in [self.path.parent, *self.path.parents]:
-            if (parent / "pyproject.toml").exists() and (parent / "src" / "plugin_ctl").exists():
-                return parent
         if self.path.parent.name == "plugins" and self.path.parent.parent.name == "catalog":
             return self.path.parent.parent.parent
         if self.path.name == "manifest.yml" and self.path.parent.parent.name == "plugins" and self.path.parent.parent.parent.name == "examples":
             return self.path.parent.parent.parent.parent
+        for parent in [self.path.parent, *self.path.parents]:
+            if (parent / "pyproject.toml").exists() and (parent / "src" / "plugin_ctl").exists():
+                return parent
+        if self.path.name in {"manifest.yml", "plugin.yml"} or self.path.suffix in {".yml", ".yaml"}:
+            return self.path.parent
         raise ManifestError(f"cannot locate platform root for manifest {self.path}")
 
 

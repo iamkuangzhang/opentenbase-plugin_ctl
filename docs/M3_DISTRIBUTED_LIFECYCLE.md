@@ -1,4 +1,4 @@
-# M3 Distributed Lifecycle
+﻿# M3 Distributed Lifecycle
 
 ## Purpose
 
@@ -7,8 +7,8 @@ M3 freezes the distributed OpenTenBase plugin lifecycle around the following mai
 ```bash
 plugin_ctl assess ./pg_extension_source/
 plugin_ctl check <plugin_id>
-plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-plugin_ctl register <plugin_id> -f cluster.toml --execute
+plugin_ctl deploy <plugin_id> -f cluster.toml
+plugin_ctl register <plugin_id> -f cluster.toml
 plugin_ctl verify <plugin_id> -f cluster.toml
 plugin_ctl report
 ```
@@ -91,13 +91,13 @@ It is intended as a single pre-flight gate for users. It does not execute deploy
 Dry-run:
 
 ```bash
-plugin_ctl deploy <plugin_id> -f cluster.toml
+plugin_ctl deploy <plugin_id> -f cluster.toml --dry-run
 ```
 
 Execute:
 
 ```bash
-plugin_ctl deploy <plugin_id> -f cluster.toml --execute
+plugin_ctl deploy <plugin_id> -f cluster.toml
 ```
 
 Distributed deploy currently means physical payload distribution only:
@@ -115,13 +115,13 @@ It does not run `CREATE EXTENSION`.
 Dry-run:
 
 ```bash
-plugin_ctl register <plugin_id> -f cluster.toml
+plugin_ctl register <plugin_id> -f cluster.toml --dry-run
 ```
 
 Execute:
 
 ```bash
-plugin_ctl register <plugin_id> -f cluster.toml --execute
+plugin_ctl register <plugin_id> -f cluster.toml
 ```
 
 Registration behavior:
@@ -185,7 +185,7 @@ plugin_ctl plugin diagnose <plugin_id>
 plugin_ctl assess ./pg_extension_source/
 plugin_ctl cluster inspect -f cluster.toml
 plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
-plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>
+plugin_ctl cluster distribute -f cluster.toml <plugin_id>
 ```
 
 They are not removed or replaced by the main flow.

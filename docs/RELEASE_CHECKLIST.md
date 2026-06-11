@@ -1,4 +1,4 @@
-# v0.1.0 Release Checklist
+﻿# v0.1.0 Release Checklist
 
 ## Documentation
 
@@ -43,7 +43,7 @@ The CLI currently resolves platform assets from the source-tree root. A wheel in
 - [x] Read-only commands are documented.
 - [x] Commands that modify database or local state are documented.
 - [x] Role hooks are documented as non-executing.
-- [x] Future hook execution requires an explicit boundary such as `--execute-hooks`.
+- [x] Future hook execution requires an explicit boundary such as `--run-hooks`.
 - [x] Rollback is documented as best-effort.
 - [x] `otb_timeseries` destructive rollback is not implemented.
 
@@ -76,13 +76,13 @@ If local OpenTenBase is available, optionally run:
 plugin_ctl plugin precheck pluginctl_smoke_plugin
 plugin_ctl deploy pluginctl_smoke_plugin
 plugin_ctl verify pluginctl_smoke_plugin
+plugin_ctl rollback pluginctl_smoke_plugin --dry-run
 plugin_ctl rollback pluginctl_smoke_plugin
-plugin_ctl rollback pluginctl_smoke_plugin --execute
 plugin_ctl verify pluginctl_smoke_plugin --removed
 plugin_ctl report
 ```
 
-Latest local validation also completed the `pluginctl_smoke_plugin` deploy, verify, rollback dry-run, rollback execute, removed verify, and report flow.
+Latest local validation also completed the `pluginctl_smoke_plugin` deploy, verify, rollback preview, rollback execution, removed verify, and report flow.
 
 ## Release Decision
 

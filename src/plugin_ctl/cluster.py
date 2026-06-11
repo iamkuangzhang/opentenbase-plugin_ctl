@@ -109,7 +109,7 @@ def require_cluster_config(explicit_path: str | Path | None = None) -> Path:
     path = find_cluster_config(explicit_path)
     if path is None:
         raise ValueError(
-            "cluster config not found; run 'plugin_ctl cluster init' or pass '-f cluster.toml'"
+            "cluster config not found; run 'plugin_ctl init' or pass '-f cluster.toml'"
         )
     return path
 

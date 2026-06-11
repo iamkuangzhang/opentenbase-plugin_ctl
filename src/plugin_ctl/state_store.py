@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,7 +23,7 @@ class StateRecord:
 class StateStore:
     def __init__(self, root: Path) -> None:
         self.root = root
-        self.path = root / ".plugin_ctl" / "state.json"
+        self.path = _runtime_file(root, "PLUGIN_CTL_STATE_FILE", "state.json")
 
     def _read(self) -> list[dict[str, Any]]:
         if not self.path.exists():
@@ -58,3 +59,17 @@ class StateStore:
 
     def all(self) -> list[StateRecord]:
         return [StateRecord(**record) for record in self._read()]
+
+
+def _runtime_file(root: Path, env_name: str, filename: str) -> Path:
+    override = os.environ.get(env_name)
+    if override:
+        return Path(override).expanduser()
+    parent = root / ".plugin_ctl"
+    if parent.exists():
+        if os.access(parent, os.W_OK):
+            return parent / filename
+        return Path.home() / ".plugin_ctl" / filename
+    if os.access(root, os.W_OK):
+        return parent / filename
+    return Path.home() / ".plugin_ctl" / filename

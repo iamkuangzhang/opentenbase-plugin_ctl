@@ -1,4 +1,4 @@
-# M2 Plugin Governance
+﻿# M2 Plugin Governance
 
 ## Direction
 
@@ -97,8 +97,8 @@ The plan output is plugin-first:
 - `deploy_plan` says whether deploy would skip or copy the payload and run
   `install_sql`.
 - `verify_plan` says which smoke SQL would run.
-- `rollback_plan` says whether rollback is unsupported or would require
-  `--execute`.
+- `rollback_plan` says whether rollback is unsupported or can be previewed
+  with `rollback --dry-run`.
 - `removed_verify_plan` says whether `verify --removed` has a declared probe.
 - `target_roles` comes from the plugin's distributed declaration.
 - `risks` records governance gaps, including missing probes, unsupported

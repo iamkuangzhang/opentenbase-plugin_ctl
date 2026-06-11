@@ -30,8 +30,8 @@ It validates the uninstalled deploy path without touching `otb_timeseries`:
 - execute install SQL
 - record deploy state
 - run verify SQL
-- dry-run rollback by default
-- execute rollback only with `--execute`
+- rollback preview with `rollback --dry-run`
+- review rollback first with `rollback --dry-run`
 - verify removal with `verify --removed`
 
 This proves the platform lifecycle plumbing. It does not replace a future clean

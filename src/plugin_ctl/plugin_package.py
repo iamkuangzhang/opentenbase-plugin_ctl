@@ -56,19 +56,15 @@ def _plugin_id(raw: dict[str, Any], fallback: str = "unknown") -> str:
 
 
 def find_plugin_manifest_path(root: Path, plugin_id: str) -> Path:
-    for manifest_root in [
-        root / "catalog" / "plugins",
-        root / "examples" / "plugins",
-    ]:
-        if not manifest_root.exists():
+    from .catalog import Catalog
+
+    for path in Catalog(root=root).manifest_paths():
+        try:
+            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
             continue
-        for path in sorted([*manifest_root.glob("*.yml"), *manifest_root.glob("*/manifest.yml")]):
-            try:
-                raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-            except yaml.YAMLError:
-                continue
-            if isinstance(raw, dict) and _plugin_id(raw) == plugin_id:
-                return path
+        if isinstance(raw, dict) and _plugin_id(raw) == plugin_id:
+            return path
     raise ManifestError(f"plugin not found: {plugin_id}")
 
 
@@ -208,7 +204,7 @@ def plugin_plan(runtime: GovernanceRuntime, manifest: PluginManifest) -> PluginP
         verify_plan += f"; expect stdout {manifest.payload['verify_expect_stdout']}"
 
     if manifest.rollback_sql:
-        rollback_plan = f"dry-run by default; --execute runs {manifest.rollback_sql}"
+        rollback_plan = f"run {manifest.rollback_sql}; use rollback --dry-run to preview"
         sql_files.append(str(manifest.rollback_sql))
     else:
         rollback_plan = "unsupported; manifest has no rollback_sql"

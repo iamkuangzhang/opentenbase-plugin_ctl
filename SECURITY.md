@@ -12,6 +12,6 @@ Please report security issues through GitHub issues unless the report includes p
 
 OpenTenBase PluginCtl separates read-only governance commands from lifecycle commands that may modify the database.
 
-Role hooks are currently planned, linted, archived, and checked for consistency, but they are not executed automatically. A future hook execution feature must require an explicit flag such as `--execute-hooks`.
+Role hooks are currently planned, linted, archived, and checked for consistency, but they are not executed automatically. A future hook execution feature must require an explicit flag such as `--run-hooks`.
 
-`rollback` is best-effort and should be reviewed before execution. It only executes when `--execute` is passed.
+`rollback` is best-effort and should be reviewed with `rollback --dry-run` before execution.

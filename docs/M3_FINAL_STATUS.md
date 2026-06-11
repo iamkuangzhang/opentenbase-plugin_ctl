@@ -1,4 +1,4 @@
-# M3 Final Status
+﻿# M3 Final Status
 
 ## Freeze Conclusion
 
@@ -8,8 +8,8 @@ The frozen main flow is:
 
 ```bash
 plugin_ctl check <plugin_id>
-plugin_ctl deploy <plugin_id> -f cluster.toml --execute
-plugin_ctl activate <plugin_id> -f cluster.toml --execute
+plugin_ctl deploy <plugin_id> -f cluster.toml
+plugin_ctl activate <plugin_id> -f cluster.toml
 plugin_ctl verify <plugin_id> -f cluster.toml
 plugin_ctl report
 ```
@@ -33,7 +33,7 @@ plugin_ctl ...
 ### Physical Distribution
 
 - Dry-run distribution planning.
-- Real SSH/SCP physical distribution under explicit `--execute`.
+- Real SSH/SCP physical distribution, with `--dry-run` available for preview.
 - `.so` to `lib_dir`.
 - `.control` and `.sql` to `extension_dir`.
 - Remote directory existence/writability checks.
@@ -50,7 +50,7 @@ plugin_ctl ...
 
 - `activate <plugin_id> -f cluster.toml`.
 - Default dry-run.
-- `--execute` required for `CREATE EXTENSION`.
+- `--dry-run` previews registration; without it, registration runs `CREATE EXTENSION`.
 - Serial coordinator activation.
 - Concurrent coordinator version reconciliation.
 - No datanode connection during activation.
@@ -71,7 +71,7 @@ M2 Docker sandbox behavior remains intact:
 
 - `deploy <plugin_id>` without `-f` still uses the Docker runtime path.
 - `verify <plugin_id>` without `-f` still uses smoke verify.
-- `rollback <plugin_id>` still uses the old local runtime and remains dry-run unless `--execute` is passed.
+- `rollback <plugin_id>` still uses the old local runtime; `rollback --dry-run` previews the rollback SQL.
 - `OpenTenBaseRuntime` still defaults to `opentenbaseDN1`, `127.0.0.1`, port `30004`, user `opentenbase`, database `postgres`.
 
 ## Advanced / Debug Commands
@@ -92,7 +92,7 @@ plugin_ctl plugin archive inspect <plugin_id>
 plugin_ctl plugins status
 plugin_ctl cluster inspect -f cluster.toml
 plugin_ctl cluster distribute --dry-run -f cluster.toml <plugin_id>
-plugin_ctl cluster distribute --execute -f cluster.toml <plugin_id>
+plugin_ctl cluster distribute -f cluster.toml <plugin_id>
 plugin_ctl cluster status
 plugin_ctl doctor
 ```
@@ -103,8 +103,8 @@ plugin_ctl doctor
 - The tool does not accept untrusted topology files as safe input.
 - `psql`, `ssh`, `scp`, and `docker` are invoked with argument lists, not `shell=True`.
 - Extension names are validated as PostgreSQL identifiers before SQL generation.
-- `deploy -f --execute` writes remote files only.
-- `activate -f --execute` changes coordinator metadata only.
+- `deploy -f` writes remote files only.
+- `activate -f` changes coordinator metadata only.
 - `verify -f` is read-only.
 - No automatic sudo is attempted.
 - No automatic remote system directory creation is attempted.

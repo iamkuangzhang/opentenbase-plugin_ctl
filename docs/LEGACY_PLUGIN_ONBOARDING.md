@@ -1,4 +1,4 @@
-# Legacy Plugin Onboarding
+﻿# Legacy Plugin Onboarding
 
 ## Scope
 

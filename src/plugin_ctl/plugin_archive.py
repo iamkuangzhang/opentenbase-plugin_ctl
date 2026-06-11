@@ -10,7 +10,7 @@ from typing import Any
 from .manifest import PluginManifest
 from .plugin_diagnose import PluginDiagnosis
 from .plugin_roles import manifest_roles, role_hooks_json, role_steps_json, role_hooks, role_steps
-from .state_store import StateRecord, StateStore
+from .state_store import StateRecord, StateStore, _runtime_file
 
 
 @dataclass(slots=True)
@@ -34,7 +34,7 @@ class ArchiveRecord:
 class ArchiveStore:
     def __init__(self, root: Path) -> None:
         self.root = root
-        self.path = root / ".plugin_ctl" / "archive.json"
+        self.path = _runtime_file(root, "PLUGIN_CTL_ARCHIVE_FILE", "archive.json")
 
     def _read(self) -> list[dict[str, Any]]:
         if not self.path.exists():

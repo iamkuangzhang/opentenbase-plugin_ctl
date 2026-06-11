@@ -1,4 +1,4 @@
-# M1 otb_timeseries Clean Deploy Plan
+﻿# M1 otb_timeseries Clean Deploy Plan
 
 ## Current Constraint
 
@@ -58,8 +58,8 @@ M1 now proves the platform deploy chain through `pluginctl_smoke_plugin`:
 - payload copy
 - `psql -f` install execution
 - verify
-- rollback dry-run
-- rollback execute
+- rollback preview
+- rollback execution
 - removed verification
 - state/report persistence
 

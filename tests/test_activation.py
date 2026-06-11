@@ -183,9 +183,9 @@ class ActivationCliTest(unittest.TestCase):
             code = main(argv)
         return code, output.getvalue()
 
-    def test_register_defaults_to_dry_run_without_executor(self) -> None:
+    def test_register_dry_run_does_not_create_executor(self) -> None:
         with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("dry-run must not create psql executor")):
-            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
+            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run"])
 
         self.assertEqual(code, 0)
         self.assertIn("Mode: dry-run", output)
@@ -193,10 +193,10 @@ class ActivationCliTest(unittest.TestCase):
         self.assertIn("Datanodes: not_connected", output)
         self.assertIn("CREATE EXTENSION: planned on primary CN only", output)
 
-    def test_register_execute_uses_executor_once_then_verifies_all_cn(self) -> None:
+    def test_register_defaults_to_execute_once_then_verifies_all_cn(self) -> None:
         fake = FakeCoordinatorExecutor()
         with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=fake):
-            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute"])
+            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
 
         self.assertEqual(code, 0)
         self.assertIn("Mode: execute", output)
@@ -208,20 +208,20 @@ class ActivationCliTest(unittest.TestCase):
         fake = FakeCoordinatorExecutor()
         with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(self.cluster_file)}):
             with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=fake):
-                code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "--execute"])
+                code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin"])
 
         self.assertEqual(code, 0)
         self.assertIn("CREATE EXTENSION: executed on primary CN only", output)
         self.assertEqual(len([call for call in fake.calls if call[1].startswith("CREATE EXTENSION")]), 1)
 
-    def test_register_rejects_dry_run_and_execute_together(self) -> None:
+    def test_register_rejects_removed_execute_flag(self) -> None:
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
-                main(["register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run", "--execute"])
+                main(["register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute"])
 
-    def test_register_execute_json_shape_is_stable(self) -> None:
+    def test_register_json_shape_is_stable(self) -> None:
         with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=FakeCoordinatorExecutor()):
-            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute", "--json"])
+            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--json"])
 
         self.assertEqual(code, 0)
         payload = json.loads(output)
@@ -236,7 +236,7 @@ class ActivationCliTest(unittest.TestCase):
 
     def test_activate_alias_still_works_with_deprecation_notice(self) -> None:
         with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("dry-run must not create psql executor")):
-            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
+            code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run"])
 
         self.assertEqual(code, 0)
         self.assertIn("deprecated", output)

@@ -170,10 +170,10 @@ payload:
         self.assertFalse(payload["ok"])
         self.assertTrue(payload["errors"])
 
-    def test_deploy_with_cluster_file_defaults_to_physical_dry_run(self) -> None:
+    def test_deploy_with_cluster_file_dry_run_previews_physical_distribution(self) -> None:
         with patch("plugin_ctl.cli.ScpSshRemoteExecutor", side_effect=AssertionError("dry-run must not create executor")):
             code, output = self._run(
-                ["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)]
+                ["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run"]
             )
 
         self.assertEqual(code, 0)
@@ -182,11 +182,11 @@ payload:
         self.assertIn("CREATE EXTENSION: not executed", output)
         self.assertIn("Result: OK", output)
 
-    def test_deploy_with_cluster_file_execute_uses_physical_distribution(self) -> None:
+    def test_deploy_with_cluster_file_defaults_to_physical_distribution(self) -> None:
         fake = FakeRemoteExecutor()
         with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
             code, output = self._run(
-                ["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--execute"]
+                ["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)]
             )
 
         self.assertEqual(code, 0)
@@ -201,21 +201,29 @@ payload:
         fake = FakeRemoteExecutor()
         with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(self.cluster_file)}):
             with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
-                code, output = self._run(["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "--execute"])
+                code, output = self._run(["--root", str(self.root), "deploy", "pluginctl_smoke_plugin"])
 
         self.assertEqual(code, 0)
         self.assertTrue(fake.copies)
         self.assertIn("Mode: execute", output)
         self.assertIn("Physical distribution: executed", output)
 
-    def test_deploy_execute_requires_cluster_config(self) -> None:
+    def test_deploy_requires_cluster_config_for_execution(self) -> None:
         missing_default = str(Path(self.tempdir.name) / "missing.toml")
         with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": missing_default}):
             with redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit):
-                    main(["--root", str(self.root), "deploy", "pluginctl_smoke_plugin", "--execute"])
+                    main(["--root", str(self.root), "deploy", "pluginctl_smoke_plugin"])
 
-    def test_deploy_rejects_dry_run_and_execute_together(self) -> None:
+    def test_deploy_requires_cluster_config_even_for_preview(self) -> None:
+        missing_default = str(Path(self.tempdir.name) / "missing.toml")
+        with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": missing_default}):
+            with patch("plugin_ctl.cli.OpenTenBaseRuntime", side_effect=AssertionError("deploy must not use local SQL runtime")):
+                with redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit):
+                        main(["--root", str(self.root), "deploy", "pluginctl_smoke_plugin"])
+
+    def test_deploy_rejects_removed_execute_flag(self) -> None:
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 main(
@@ -226,7 +234,6 @@ payload:
                         "pluginctl_smoke_plugin",
                         "-f",
                         str(self.cluster_file),
-                        "--dry-run",
                         "--execute",
                     ]
                 )

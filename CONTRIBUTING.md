@@ -33,4 +33,4 @@ Before opening a PR, run the full test suite and include the command output summ
 
 ## Safety
 
-Do not add commands that modify a database unless the command has an explicit execution flag and clear documentation. Role hooks must remain non-executing unless a future release introduces an explicit `--execute-hooks` boundary.
+Do not add commands that modify a database unless the command has clear documentation and a safe `--dry-run` preview when practical. Role hooks must remain non-executing unless a future release introduces an explicit `--run-hooks` boundary.

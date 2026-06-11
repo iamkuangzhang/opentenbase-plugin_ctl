@@ -1,4 +1,4 @@
-# M0 Baseline
+﻿# M0 Baseline
 
 This file freezes the current runnable baseline for the plugin_ctl OpenTenBase
 platform layer. M1 work should keep these commands and expectations intact.
@@ -88,6 +88,6 @@ Expected M0 behavior:
 
 - M0 has only one sample plugin manifest: `otb_timeseries`.
 - Full clean-environment deploy has mock coverage. The current real Docker environment exercises the already-installed deploy path.
-- Rollback is conservative. Destructive execution requires manifest `rollback_sql` and an explicit `--execute`.
+- Rollback is conservative and best-effort. It requires manifest `rollback_sql`; use `rollback --dry-run` to review before execution.
 - Docker container startup and OpenTenBase process startup are separate; after Docker restarts, GTM/CN/DN may need to be started again.
 - `verify` still emits OpenTenBase chunk distribution warnings for `otb_timeseries`; this is tracked as a plugin/runtime issue, not treated as solved by the platform.

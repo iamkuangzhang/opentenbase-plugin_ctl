@@ -1,4 +1,4 @@
-# M3 Archive And Consistency
+﻿# M3 Archive And Consistency
 
 ## Positioning
 
@@ -56,7 +56,7 @@ Current hook status:
 
 - Hooks are visible in plan, roles, diagnose, archive, and consistency.
 - Hooks are not executed automatically.
-- Future hook execution must be gated by explicit parameters such as `--execute-hooks`.
+- Future hook execution must be gated by explicit parameters such as `--run-hooks`.
 
 ## Consistency Check
 
@@ -89,7 +89,7 @@ The command can return warnings or failures, but it never repairs state automati
 
 - Bundled platform lifecycle verification plugin.
 - Package payload is complete.
-- Supports deploy, verify, rollback `--execute`, and verify `--removed`.
+- Supports deploy, verify, rollback, and verify `--removed`.
 - Safe target for archive, roles, consistency, and distributed lifecycle regression tests.
 
 `otb_timeseries`:

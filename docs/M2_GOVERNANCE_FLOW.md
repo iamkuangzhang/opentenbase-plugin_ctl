@@ -46,7 +46,7 @@ copy plugin payloads or execute lifecycle SQL.
 
 - `deploy`
 - `verify`
-- `rollback --execute`
+- `rollback`
 
 These commands may copy payloads, run SQL files, or change the installed state
 of a plugin.

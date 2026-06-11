@@ -1,4 +1,4 @@
-# OpenTenBase PluginCtl v0.1.0
+﻿# OpenTenBase PluginCtl v0.1.0
 
 ## Title
 
@@ -49,7 +49,7 @@ plugin_ctl report
 - Wheel/PyPI release is deferred.
 - `otb_timeseries` is a reference manifest in this repository and does not include the full old payload tree.
 - Role hooks are not automatically executed.
-- Rollback is best-effort and requires `--execute`.
+- Rollback is best-effort; use `rollback --dry-run` to review before execution.
 - No Web UI, plugin marketplace, batch deploy, automatic repair, cluster start, version upgrade system, or cross-database adapter.
 
 ## Validation

@@ -159,13 +159,14 @@ class ClusterCliTest(unittest.TestCase):
         self.assertIn("install.sql", output)
         self.assertIn("Result: OK", output)
 
-    def test_cluster_distribute_defaults_to_dry_run_without_flag(self) -> None:
+    def test_cluster_distribute_dry_run_without_executor(self) -> None:
         code, output = self._run(
             [
                 "--root",
                 str(self.root),
                 "cluster",
                 "distribute",
+                "--dry-run",
                 "-f",
                 str(self.cluster_file),
                 "pluginctl_smoke_plugin",
@@ -175,7 +176,7 @@ class ClusterCliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("Mode: dry-run", output)
 
-    def test_cluster_distribute_rejects_dry_run_and_execute_together(self) -> None:
+    def test_cluster_distribute_rejects_removed_execute_flag(self) -> None:
         with redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit):
                 main(
@@ -184,7 +185,6 @@ class ClusterCliTest(unittest.TestCase):
                         str(self.root),
                         "cluster",
                         "distribute",
-                        "--dry-run",
                         "--execute",
                         "-f",
                         str(self.cluster_file),
@@ -192,7 +192,7 @@ class ClusterCliTest(unittest.TestCase):
                     ]
                 )
 
-    def test_cluster_distribute_execute_uses_real_execute_path_with_fake_executor(self) -> None:
+    def test_cluster_distribute_defaults_to_real_execute_path_with_fake_executor(self) -> None:
         fake = FakeRemoteExecutor()
         with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
             code, output = self._run(
@@ -201,7 +201,6 @@ class ClusterCliTest(unittest.TestCase):
                     str(self.root),
                     "cluster",
                     "distribute",
-                    "--execute",
                     "-f",
                     str(self.cluster_file),
                     "pluginctl_smoke_plugin",
@@ -214,7 +213,7 @@ class ClusterCliTest(unittest.TestCase):
         self.assertIn("Result: OK", output)
         self.assertTrue(fake.copies)
 
-    def test_cluster_distribute_execute_json_output_is_stable(self) -> None:
+    def test_cluster_distribute_json_output_is_stable(self) -> None:
         fake = FakeRemoteExecutor()
         with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
             code, output = self._run(
@@ -223,7 +222,6 @@ class ClusterCliTest(unittest.TestCase):
                     str(self.root),
                     "cluster",
                     "distribute",
-                    "--execute",
                     "-f",
                     str(self.cluster_file),
                     "pluginctl_smoke_plugin",
@@ -246,7 +244,7 @@ class ClusterCliTest(unittest.TestCase):
         for key in ["node", "role", "status", "local_sha256", "remote_sha256", "checksum_ok"]:
             self.assertIn(key, first)
 
-    def test_cluster_distribute_execute_json_reports_checksum_failure(self) -> None:
+    def test_cluster_distribute_json_reports_checksum_failure(self) -> None:
         fake = FakeRemoteExecutor(mismatch_checksum_for="dn001")
         with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
             code, output = self._run(
@@ -255,7 +253,6 @@ class ClusterCliTest(unittest.TestCase):
                     str(self.root),
                     "cluster",
                     "distribute",
-                    "--execute",
                     "-f",
                     str(self.cluster_file),
                     "pluginctl_smoke_plugin",

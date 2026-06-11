@@ -1,4 +1,4 @@
-# M1 Status
+﻿# M1 Status
 
 ## Completed
 
@@ -17,7 +17,7 @@ Implemented capabilities:
   stdout/stderr summaries.
 - `report` shows latest state per `(plugin_id, action)`.
 - `report --json` emits machine-readable latest action state.
-- `rollback` defaults to dry-run and requires `--execute` for SQL execution.
+- `rollback` executes manifest-declared rollback SQL; use `rollback --dry-run` to preview.
 - `verify --removed` verifies object absence through a manifest `removed_probe`.
 
 ## Lifecycle Fixture
@@ -31,8 +31,8 @@ It exists to prove the Plugin Manager lifecycle chain safely:
 - payload copy into container
 - install SQL execution
 - verify SQL execution
-- rollback dry-run
-- rollback execute
+- rollback preview
+- rollback execution
 - removed verification
 - state/report visibility
 
@@ -45,7 +45,8 @@ $env:PYTHONPATH = 'src'
 plugin_ctl cluster status
 plugin_ctl deploy pluginctl_smoke_plugin
 plugin_ctl verify pluginctl_smoke_plugin
-plugin_ctl rollback pluginctl_smoke_plugin --execute
+plugin_ctl rollback pluginctl_smoke_plugin --dry-run
+plugin_ctl rollback pluginctl_smoke_plugin
 plugin_ctl verify pluginctl_smoke_plugin --removed
 plugin_ctl deploy otb_timeseries
 plugin_ctl verify otb_timeseries

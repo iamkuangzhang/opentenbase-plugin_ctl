@@ -1,4 +1,4 @@
-# M4 Release Quality
+﻿# M4 Release Quality
 
 ## 目标
 
@@ -35,7 +35,7 @@ plugin_ctl state <plugin_id>
 ```bash
 plugin_ctl deploy <plugin_id>
 plugin_ctl verify <plugin_id>
-plugin_ctl rollback <plugin_id> --execute
+plugin_ctl rollback <plugin_id>
 plugin_ctl verify <plugin_id> --removed
 ```
 
@@ -43,7 +43,7 @@ plugin_ctl verify <plugin_id> --removed
 
 - `deploy` 会复制 payload 到容器临时目录并执行 `install_sql`。
 - `verify` 会执行 smoke SQL，并写入本地 `.plugin_ctl/state.json`。
-- `rollback` 默认 dry-run，只有传入 `--execute` 才会执行 `rollback_sql`。
+- `rollback` 会执行 `rollback_sql`；如需预览，请先使用 `rollback --dry-run`。
 - `rollback` 是 best-effort，因为数据库对象、函数、schema、分布式表和节点状态不一定能被一个脚本完全恢复。
 - `report/state/archive` 读取或写入的是本地 `.plugin_ctl/` 运行态记录，不是远端数据库元数据的权威替代。
 
@@ -67,8 +67,8 @@ plugin_ctl verify <plugin_id> --removed
 当前不会自动执行 hook。未来如果支持执行，必须引入显式参数，例如：
 
 ```bash
-plugin_ctl deploy <plugin_id> --execute-hooks
-plugin_ctl rollback <plugin_id> --execute --execute-hooks
+plugin_ctl deploy <plugin_id> --run-hooks
+plugin_ctl rollback <plugin_id> --run-hooks
 ```
 
 在没有显式参数前，hook 只能作为治理计划和一致性检查的一部分。
@@ -186,8 +186,8 @@ plugin_ctl report
 如需回滚样例插件：
 
 ```bash
+plugin_ctl rollback pluginctl_smoke_plugin --dry-run
 plugin_ctl rollback pluginctl_smoke_plugin
-plugin_ctl rollback pluginctl_smoke_plugin --execute
 plugin_ctl verify pluginctl_smoke_plugin --removed
 ```
 

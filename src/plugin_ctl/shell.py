@@ -15,17 +15,45 @@ Type "quit" or "exit" to leave.
 
 HELP_TEXT = """Available commands:
   help
+  shell
   init
+  add <plugin_dir_or_manifest>
+  remove <plugin_id>
   list
   inspect <plugin_id>
   check <plugin_id>
+  assess <pg_extension_source_path> [--json]
   diagnose <plugin_id>
   deploy <plugin_id> [options]
   register <plugin_id> [options]
+  activate <plugin_id> [options]
   verify <plugin_id> [options]
   rollback <plugin_id> [options]
+  state [plugin_id]
   report [options]
   doctor
+
+Plugin governance:
+  plugin add <plugin_dir_or_manifest>
+  plugin remove <plugin_id>
+  plugin check <plugin_id>
+  plugin status <plugin_id>
+  plugin lint <plugin_id>
+  plugin plan <plugin_id>
+  plugin precheck <plugin_id>
+  plugin diagnose <plugin_id>
+  plugin roles <plugin_id>
+  plugin consistency <plugin_id>
+  plugin archive list
+  plugin archive inspect <plugin_id>
+  plugins status [--json]
+
+Cluster and distributed plugin commands:
+  cluster status
+  cluster init
+  cluster inspect
+  cluster distribute <plugin_id> [--dry-run]
+
   quit
   exit
 
@@ -36,7 +64,27 @@ initialize, or monitor an OpenTenBase cluster.
 """
 
 
-SHELL_COMMANDS = {"list", "inspect", "check", "diagnose", "deploy", "register", "verify", "rollback", "report", "doctor"}
+TOP_LEVEL_COMMANDS = {
+    "add",
+    "remove",
+    "list",
+    "inspect",
+    "check",
+    "assess",
+    "register",
+    "activate",
+    "doctor",
+    "cluster",
+    "plugin",
+    "plugins",
+    "deploy",
+    "verify",
+    "state",
+    "rollback",
+    "report",
+}
+
+PROGRAM_NAMES = {"plugin_ctl", "opentenbase-pluginctl"}
 
 
 Dispatcher = Callable[[list[str]], int]
@@ -46,12 +94,16 @@ InputFunc = Callable[[str], str]
 def translate_shell_command(parts: list[str]) -> list[str] | None:
     if not parts:
         return []
+    if parts[0] in PROGRAM_NAMES:
+        parts = parts[1:]
+        if not parts:
+            return []
     command = parts[0]
     if command == "init":
         return ["cluster", "init", *parts[1:]]
     if command == "diagnose":
         return ["plugin", "diagnose", *parts[1:]]
-    if command in SHELL_COMMANDS:
+    if command in TOP_LEVEL_COMMANDS:
         return parts
     return None
 
@@ -92,6 +144,9 @@ def run_shell(
         if line == "help":
             print(HELP_TEXT, file=out)
             continue
+        if line == "shell":
+            print("Already in PluginCtl Shell.", file=out)
+            continue
 
         try:
             parts = shlex.split(line)
@@ -114,4 +169,7 @@ def run_shell(
             continue
         except KeyboardInterrupt:
             print("", file=out)
+            continue
+        except Exception as exc:
+            print(f"Command failed: {exc}", file=out)
             continue

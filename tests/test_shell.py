@@ -143,9 +143,69 @@ class PluginCtlShellTest(unittest.TestCase):
     def test_shell_command_translation(self) -> None:
         self.assertEqual(translate_shell_command(["list"]), ["list"])
         self.assertEqual(translate_shell_command(["init"]), ["cluster", "init"])
+        self.assertEqual(translate_shell_command(["add", "/tmp/demo_plugin"]), ["add", "/tmp/demo_plugin"])
+        self.assertEqual(translate_shell_command(["remove", "demo_plugin"]), ["remove", "demo_plugin"])
         self.assertEqual(translate_shell_command(["diagnose", "pluginctl_smoke_plugin"]), ["plugin", "diagnose", "pluginctl_smoke_plugin"])
+        self.assertEqual(translate_shell_command(["plugin", "lint", "pluginctl_smoke_plugin"]), ["plugin", "lint", "pluginctl_smoke_plugin"])
+        self.assertEqual(translate_shell_command(["plugins", "status", "--json"]), ["plugins", "status", "--json"])
+        self.assertEqual(translate_shell_command(["cluster", "inspect"]), ["cluster", "inspect"])
+        self.assertEqual(translate_shell_command(["assess", "/tmp/source", "--json"]), ["assess", "/tmp/source", "--json"])
+        self.assertEqual(translate_shell_command(["state", "pluginctl_smoke_plugin"]), ["state", "pluginctl_smoke_plugin"])
         self.assertEqual(translate_shell_command(["register", "pluginctl_smoke_plugin"]), ["register", "pluginctl_smoke_plugin"])
+        self.assertEqual(translate_shell_command(["plugin_ctl", "list"]), ["list"])
         self.assertIsNone(translate_shell_command(["start", "all"]))
+
+    def test_full_cli_commands_are_available_inside_shell(self) -> None:
+        calls: list[list[str]] = []
+        output = io.StringIO()
+
+        code = run_shell(
+            self.root,
+            dispatcher=lambda argv: calls.append(argv) or 0,
+            input_func=self._input(
+                [
+                    "plugin lint pluginctl_smoke_plugin",
+                    "plugin plan pluginctl_smoke_plugin --json",
+                    "plugin precheck pluginctl_smoke_plugin",
+                    "plugin roles pluginctl_smoke_plugin",
+                    "plugin archive list",
+                    "plugins status --json",
+                    "cluster inspect",
+                    "cluster distribute pluginctl_smoke_plugin --dry-run",
+                    "assess /tmp/source --json",
+                    "state pluginctl_smoke_plugin",
+                    "activate pluginctl_smoke_plugin --dry-run",
+                    "quit",
+                ]
+            ),
+            output=output,
+        )
+
+        self.assertEqual(code, 0)
+        expected = [
+            ["--root", str(self.root), "plugin", "lint", "pluginctl_smoke_plugin"],
+            ["--root", str(self.root), "plugin", "plan", "pluginctl_smoke_plugin", "--json"],
+            ["--root", str(self.root), "plugin", "precheck", "pluginctl_smoke_plugin"],
+            ["--root", str(self.root), "plugin", "roles", "pluginctl_smoke_plugin"],
+            ["--root", str(self.root), "plugin", "archive", "list"],
+            ["--root", str(self.root), "plugins", "status", "--json"],
+            ["--root", str(self.root), "cluster", "inspect"],
+            ["--root", str(self.root), "cluster", "distribute", "pluginctl_smoke_plugin", "--dry-run"],
+            ["--root", str(self.root), "assess", "/tmp/source", "--json"],
+            ["--root", str(self.root), "state", "pluginctl_smoke_plugin"],
+            ["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "--dry-run"],
+        ]
+        self.assertEqual(calls, expected)
+
+    def test_shell_command_inside_shell_does_not_recurse(self) -> None:
+        output = io.StringIO()
+        calls: list[list[str]] = []
+
+        code = run_shell(self.root, dispatcher=lambda argv: calls.append(argv) or 0, input_func=self._input(["shell", "quit"]), output=output)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, [])
+        self.assertIn("Already in PluginCtl Shell.", output.getvalue())
 
     def test_system_exit_does_not_leave_shell(self) -> None:
         output = io.StringIO()
@@ -160,6 +220,22 @@ class PluginCtlShellTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(len(calls), 1)
         self.assertIn("Command exited with status 2.", output.getvalue())
+
+    def test_regular_exception_does_not_leave_shell(self) -> None:
+        output = io.StringIO()
+        calls: list[list[str]] = []
+
+        def dispatch(argv: list[str]) -> int:
+            calls.append(argv)
+            if len(calls) == 1:
+                raise PermissionError("state path is not writable")
+            return 0
+
+        code = run_shell(self.root, dispatcher=dispatch, input_func=self._input(["rollback demo", "list", "quit"]), output=output)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("Command failed: state path is not writable", output.getvalue())
 
     def test_list_maps_to_existing_list_command(self) -> None:
         output = io.StringIO()
