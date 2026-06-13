@@ -95,6 +95,20 @@ Use `help advanced` for compatibility and debugging commands.
 
 `rollback <plugin_id>` executes the manifest-declared rollback SQL. In shell mode, modifying commands ask for confirmation before running.
 
+## One-Stop Check
+
+`check` accepts a known plugin id, a plugin directory, or a manifest path:
+
+```text
+pluginctl> check my_plugin
+pluginctl> check ./my_plugin
+pluginctl> check ./my_plugin/manifest.yml
+```
+
+It prints six grouped sections: package structure, extension files, PluginCtl management state, OpenTenBase cluster config, distributed deployment state, and registration/verification state.
+
+Final statuses are `NEW`, `READY`, `DEPLOYED`, `REGISTERED`, `BROKEN`, `REMOVED`, and `UNKNOWN`. Missing `cluster.toml` or an unavailable database is reported as `SKIP` with a next-step hint instead of crashing.
+
 ## Safety Boundary
 
 Read-only or mostly read-only commands include `list`, `check`, `help`, and `help advanced`.

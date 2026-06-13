@@ -115,16 +115,18 @@ class MainFlowCliTest(unittest.TestCase):
             code = main(argv)
         return code, output.getvalue()
 
-    def test_check_aggregates_lint_plan_precheck_and_diagnose(self) -> None:
+    def test_check_renders_six_section_health_report(self) -> None:
         with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
             code, output = self._run(["--root", str(self.root), "check", "pluginctl_smoke_plugin"])
 
         self.assertEqual(code, 0)
-        self.assertIn("== lint ==", output)
-        self.assertIn("== plan ==", output)
-        self.assertIn("== precheck ==", output)
-        self.assertIn("== diagnose ==", output)
-        self.assertIn("Result: OK", output)
+        self.assertIn("[1/6] 插件包结构", output)
+        self.assertIn("[2/6] 扩展文件", output)
+        self.assertIn("[3/6] PluginCtl 管理状态", output)
+        self.assertIn("[4/6] OpenTenBase 集群配置", output)
+        self.assertIn("[5/6] 分布式部署状态", output)
+        self.assertIn("[6/6] 注册与验证状态", output)
+        self.assertIn("结果: READY", output)
 
     def test_check_json_has_stable_keys(self) -> None:
         with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
@@ -134,8 +136,10 @@ class MainFlowCliTest(unittest.TestCase):
         payload = json.loads(output)
         self.assertEqual(payload["plugin_id"], "pluginctl_smoke_plugin")
         self.assertTrue(payload["ok"])
-        for key in ["lint", "plan", "precheck", "diagnose", "errors"]:
+        self.assertEqual(payload["final_status"], "READY")
+        for key in ["sections", "errors", "warnings", "recent_actions", "next_step"]:
             self.assertIn(key, payload)
+        self.assertEqual(len(payload["sections"]), 6)
 
     def test_check_path_auto_adds_plugin_without_polluting_json(self) -> None:
         catalog_file = Path(self.tempdir.name) / "catalog.json"

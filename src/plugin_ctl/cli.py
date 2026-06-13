@@ -48,6 +48,7 @@ from .plugin_archive import ArchiveStore, archive_list_json, archive_record_json
 from .plugin_consistency import consistency_check, consistency_items_json
 from .plugin_diagnose import PluginDiagnosis, diagnose_plugin, diagnosis_json, diagnosis_summary_json, diagnosis_rows
 from .plugin_governance import governance_status, governance_status_json, plugin_checks
+from .plugin_health import build_plugin_health_report, health_report_json, render_health_report
 from .plugin_package import (
     LintItem,
     PluginPlan,
@@ -806,69 +807,18 @@ def _aggregated_check_errors(lint_items: list[LintItem], precheck_items: list[Pr
 
 
 def cmd_check(root: Path, plugin_id: str, *, as_json: bool = False, lang: str | None = None) -> int:
-    output_lang = normalize_lang(lang)
-    lint_items, plan, precheck_items, diagnosis = _aggregated_check(root, plugin_id)
-    errors = _aggregated_check_errors(lint_items, precheck_items, diagnosis)
+    report = build_plugin_health_report(
+        root,
+        plugin_id,
+        runtime=OpenTenBaseRuntime(),
+        sql_executor=PsqlCoordinatorExecutor(),
+        remote_executor=ScpSshRemoteExecutor(),
+    )
     if as_json:
-        print(
-            json.dumps(
-                {
-                    "plugin_id": plugin_id,
-                    "ok": not errors,
-                    "lint": lint_items_json(lint_items),
-                    "plan": plugin_plan_json(plan),
-                    "precheck": precheck_items_json(precheck_items),
-                    "diagnose": diagnosis_json(diagnosis),
-                    "errors": errors,
-                },
-                indent=2,
-                ensure_ascii=False,
-            )
-        )
-        return 1 if errors else 0
-
-    print(f"Plugin: {plugin_id}")
-    print("== lint ==")
-    print(render_table(["plugin_id", text("check", output_lang), text("status", output_lang), text("detail", output_lang)], [[item.plugin_id, item.check, value(item.status, output_lang), item.detail] for item in lint_items]))
-    print("== plan ==")
-    print(
-        render_table(
-            [text("check", output_lang), text("detail", output_lang)],
-            [
-                [text("installed_state", output_lang), value(plan.installed_state, output_lang)],
-                [text("target_roles", output_lang), ", ".join(plan.target_roles) or "none"],
-                [text("deploy_plan", output_lang), plan.deploy_plan],
-                [text("verify_plan", output_lang), plan.verify_plan],
-                [text("rollback_plan", output_lang), plan.rollback_plan],
-                [text("risk", output_lang), "; ".join(plan.risks) or "none"],
-                [text("recommendation", output_lang), plan.recommendation],
-            ],
-        )
-    )
-    print("== precheck ==")
-    print(render_table(["plugin_id", text("check", output_lang), text("status", output_lang), text("detail", output_lang)], [[item.plugin_id, item.check, value(item.status, output_lang), item.detail] for item in precheck_items]))
-    print("== diagnose ==")
-    print(
-        render_table(
-            [text("check", output_lang), text("detail", output_lang)],
-            [
-                [text("package_ok", output_lang), value("yes" if diagnosis.package_ok else "no", output_lang)],
-                [text("env_ready", output_lang), value("yes" if diagnosis.env_ready else "no", output_lang)],
-                [text("installed_state", output_lang), value(diagnosis.installed_state, output_lang)],
-                [text("next_action", output_lang), value(diagnosis.next_action, output_lang)],
-                [text("risk", output_lang), diagnosis.risk],
-                [text("conclusion", output_lang), message(diagnosis.conclusion_key, output_lang)],
-            ],
-        )
-    )
-    if errors:
-        print("Errors:")
-        for error in errors:
-            print(f"- {error}")
-        print("Result: FAILED")
-        return 1
-    print("Result: OK")
-    return 0
+        print(json.dumps(health_report_json(report), indent=2, ensure_ascii=False))
+    else:
+        print(render_health_report(report))
+    return 1 if report.final_status == "BROKEN" else 0
 
 
 def cmd_assess(source_path: Path, *, as_json: bool = False) -> int:
@@ -1408,8 +1358,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "inspect":
             return cmd_inspect(args.root, args.plugin_id)
         if args.command == "check":
-            plugin_id, _, _ = ensure_plugin_registered(args.root, args.plugin_id_or_path, announce=not args.json)
-            return cmd_check(args.root, plugin_id, as_json=args.json, lang=args.lang)
+            return cmd_check(args.root, args.plugin_id_or_path, as_json=args.json, lang=args.lang)
         if args.command == "assess":
             return cmd_assess(args.source_path, as_json=args.json)
         if args.command == "register":

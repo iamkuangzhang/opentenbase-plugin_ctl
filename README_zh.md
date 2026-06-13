@@ -99,6 +99,20 @@ help advanced
 
 `rollback <plugin_id>`：执行 manifest 声明的回滚 SQL。交互式 shell 中，修改性命令执行前会先询问确认。
 
+## 一站式体检
+
+`check` 可以接已知插件 ID、插件目录或 manifest 路径：
+
+```text
+pluginctl> check my_plugin
+pluginctl> check ./my_plugin
+pluginctl> check ./my_plugin/manifest.yml
+```
+
+它会按六段输出：插件包结构、扩展文件、PluginCtl 管理状态、OpenTenBase 集群配置、分布式部署状态、注册与验证状态。
+
+最终状态包括 `NEW`、`READY`、`DEPLOYED`、`REGISTERED`、`BROKEN`、`REMOVED`、`UNKNOWN`。如果没有 `cluster.toml` 或数据库暂时连不上，会显示 `SKIP` 和下一步建议，不会直接崩溃。
+
 ## 安全边界
 
 只读或近似只读命令包括 `list`、`check`、`help`、`help advanced`。

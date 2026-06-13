@@ -140,7 +140,7 @@ class DevInitTest(unittest.TestCase):
                 with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeRuntime()):
                     check_code, check_output = self.run_cli(["--root", str(self.root), "check", "my_plugin"])
                 self.assertEqual(check_code, 0)
-                self.assertIn("Result: OK", check_output)
+                self.assertIn("结果: READY", check_output)
 
     def test_new_generates_plugin_and_adds_to_catalog(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -320,7 +320,7 @@ class PluginCtlShellTest(unittest.TestCase):
                 check_code = main(["--root", str(self.root), "check", "pluginctl_smoke_plugin"])
 
         self.assertEqual(check_code, 0)
-        self.assertIn("Result: OK", check_output.getvalue())
+        self.assertIn("结果: READY", check_output.getvalue())
 
 
 if __name__ == "__main__":
