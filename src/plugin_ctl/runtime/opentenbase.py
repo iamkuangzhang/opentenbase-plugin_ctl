@@ -44,6 +44,7 @@ class ScpSshRemoteExecutor:
                 argv,
                 check=False,
                 capture_output=True,
+                stdin=subprocess.DEVNULL,
                 text=True,
                 timeout=self.timeout_seconds,
             )
@@ -69,6 +70,7 @@ class ScpSshRemoteExecutor:
             node,
             [
                 "ssh",
+                "-n",
                 "-p",
                 str(node.ssh_port),
                 f"{node.ssh_user}@{node.host}",

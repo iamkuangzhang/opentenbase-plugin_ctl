@@ -242,6 +242,25 @@ class DistributedVerifyCliTest(unittest.TestCase):
         self.assertIn("Mode: distributed-verify", output)
         self.assertIn("Result: OK", output)
 
+    def test_verify_removed_uses_removed_probe_even_when_cluster_config_exists(self) -> None:
+        class Runtime:
+            container = "fake"
+            host = "127.0.0.1"
+            port = 30004
+            user = "opentenbase"
+            database = "postgres"
+
+            def run_sql(self, sql: str) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(args=["psql"], returncode=0, stdout="removed\n", stderr="")
+
+        with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(self.cluster_file)}):
+            with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("removed verify must not enter distributed verify")):
+                with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=Runtime()):
+                    code, output = self._run(["--root", str(self.root), "verify", "pluginctl_smoke_plugin", "--removed"])
+
+        self.assertEqual(code, 0)
+        self.assertIn("removed verify passed", output)
+
     def test_verify_json_shape_is_stable(self) -> None:
         with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=FakeSqlExecutor()):
             with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=FakeRemoteExecutor(self.root)):

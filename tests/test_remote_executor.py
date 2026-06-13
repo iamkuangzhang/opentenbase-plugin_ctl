@@ -35,9 +35,10 @@ class RemoteExecutorTest(unittest.TestCase):
             result = ScpSshRemoteExecutor().run(self.node, ["echo", "ok"])
 
         args, kwargs = run.call_args
-        self.assertEqual(args[0], ["ssh", "-p", "2222", "opentenbase@10.0.0.11", "echo", "ok"])
+        self.assertEqual(args[0], ["ssh", "-n", "-p", "2222", "opentenbase@10.0.0.11", "echo", "ok"])
         self.assertFalse(kwargs["check"])
         self.assertTrue(kwargs["capture_output"])
+        self.assertIs(kwargs["stdin"], subprocess.DEVNULL)
         self.assertTrue(kwargs["text"])
         self.assertEqual(result.stdout, "ok")
 
@@ -67,6 +68,7 @@ class RemoteExecutorTest(unittest.TestCase):
             ],
         )
         self.assertFalse(kwargs["check"])
+        self.assertIs(kwargs["stdin"], subprocess.DEVNULL)
         self.assertEqual(result.returncode, 0)
 
     def test_sha256_file_uses_remote_sha256sum(self) -> None:
@@ -82,7 +84,7 @@ class RemoteExecutorTest(unittest.TestCase):
         args, _ = run.call_args
         self.assertEqual(
             args[0],
-            ["ssh", "-p", "2222", "opentenbase@10.0.0.11", "sha256sum", "/opt/otb/lib/otb_timeseries.so"],
+            ["ssh", "-n", "-p", "2222", "opentenbase@10.0.0.11", "sha256sum", "/opt/otb/lib/otb_timeseries.so"],
         )
         self.assertEqual(result.stdout, "abc  /opt/otb/lib/otb_timeseries.so\n")
 

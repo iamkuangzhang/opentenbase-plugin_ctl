@@ -43,6 +43,29 @@ plugin_ctl inspect xxx_plugin
 plugin_ctl remove xxx_plugin
 ```
 
+## 开发一个插件
+
+生成一个适合新手学习的 OpenTenBase / PostgreSQL extension 插件骨架：
+
+```bash
+plugin_ctl dev init my_plugin
+plugin_ctl add ./my_plugin
+plugin_ctl check my_plugin
+plugin_ctl deploy my_plugin
+plugin_ctl register my_plugin
+plugin_ctl verify my_plugin
+plugin_ctl report
+```
+
+`dev init` 会生成一个带中文注释的 SQL-only 插件目录，包括 `manifest.yml`、`.control` 文件、安装 SQL、验证 SQL、回滚 SQL、`.pluginctlignore` 和入门 README。它用于理解 extension 基础结构和 PluginCtl 生命周期流程；第一版不编译 C 代码，也不生成 `.so` 文件。
+
+你也可以指定父目录，或者覆盖本命令生成的文件：
+
+```bash
+plugin_ctl dev init my_plugin --dir ./plugins
+plugin_ctl dev init my_plugin --dir ./plugins --force
+```
+
 ## 5 分钟试用
 
 建议先测试内置的 `pluginctl_smoke_plugin`。它是安全样例插件，用来验证 PluginCtl 自己的生命周期能力。
@@ -89,6 +112,7 @@ Type "quit" or "exit" to leave.
 
 pluginctl> list
 pluginctl> init
+pluginctl> dev init my_plugin
 pluginctl> add /path/to/xxx_plugin
 pluginctl> check pluginctl_smoke_plugin
 pluginctl> deploy pluginctl_smoke_plugin
@@ -167,6 +191,14 @@ plugin_ctl plugin remove <plugin_id>
 ```bash
 plugin_ctl assess <pg_extension_source_path>
 plugin_ctl assess <pg_extension_source_path> --json
+```
+
+插件开发：
+
+```bash
+plugin_ctl dev init <plugin_id>
+plugin_ctl dev init <plugin_id> --dir <target_dir>
+plugin_ctl dev init <plugin_id> --force
 ```
 
 插件治理：

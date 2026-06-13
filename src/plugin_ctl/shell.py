@@ -32,6 +32,7 @@ HELP_TEXT = """Available commands:
   state [plugin_id]
   report [options]
   doctor
+  dev init <plugin_id> [--dir <target_dir>] [--force]
 
 Plugin governance:
   plugin add <plugin_dir_or_manifest>
@@ -74,6 +75,7 @@ TOP_LEVEL_COMMANDS = {
     "register",
     "activate",
     "doctor",
+    "dev",
     "cluster",
     "plugin",
     "plugins",
