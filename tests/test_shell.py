@@ -118,6 +118,8 @@ class PluginCtlShellTest(unittest.TestCase):
         text = output.getvalue()
         self.assertIn("OpenTenBase PluginCtl Shell", text)
         self.assertIn("Available commands:", text)
+        self.assertIn("new <plugin_id>", text)
+        self.assertNotIn("plugin lint", text)
         self.assertIn('Unknown command. Type "help" to show commands.', text)
         self.assertEqual(calls, [])
 
@@ -142,6 +144,8 @@ class PluginCtlShellTest(unittest.TestCase):
 
     def test_shell_command_translation(self) -> None:
         self.assertEqual(translate_shell_command(["list"]), ["list"])
+        self.assertEqual(translate_shell_command(["list", "demo_plugin"]), ["list", "demo_plugin"])
+        self.assertEqual(translate_shell_command(["new", "demo_plugin"]), ["new", "demo_plugin"])
         self.assertEqual(translate_shell_command(["init"]), ["cluster", "init"])
         self.assertEqual(translate_shell_command(["add", "/tmp/demo_plugin"]), ["add", "/tmp/demo_plugin"])
         self.assertEqual(translate_shell_command(["remove", "demo_plugin"]), ["remove", "demo_plugin"])
@@ -154,6 +158,21 @@ class PluginCtlShellTest(unittest.TestCase):
         self.assertEqual(translate_shell_command(["register", "pluginctl_smoke_plugin"]), ["register", "pluginctl_smoke_plugin"])
         self.assertEqual(translate_shell_command(["plugin_ctl", "list"]), ["list"])
         self.assertIsNone(translate_shell_command(["start", "all"]))
+
+    def test_help_advanced_shows_compatibility_commands(self) -> None:
+        output = io.StringIO()
+
+        code = run_shell(
+            self.root,
+            dispatcher=lambda argv: 0,
+            input_func=self._input(["help advanced", "quit"]),
+            output=output,
+        )
+
+        self.assertEqual(code, 0)
+        text = output.getvalue()
+        self.assertIn("Advanced and compatibility commands:", text)
+        self.assertIn("plugin lint <plugin_id>", text)
 
     def test_full_cli_commands_are_available_inside_shell(self) -> None:
         calls: list[list[str]] = []
@@ -231,11 +250,28 @@ class PluginCtlShellTest(unittest.TestCase):
                 raise PermissionError("state path is not writable")
             return 0
 
-        code = run_shell(self.root, dispatcher=dispatch, input_func=self._input(["rollback demo", "list", "quit"]), output=output)
+        code = run_shell(self.root, dispatcher=dispatch, input_func=self._input(["rollback demo", "y", "list", "quit"]), output=output)
 
         self.assertEqual(code, 0)
         self.assertEqual(len(calls), 2)
         self.assertIn("Command failed: state path is not writable", output.getvalue())
+
+    def test_modifying_shell_commands_confirm_before_dispatch(self) -> None:
+        output = io.StringIO()
+        calls: list[list[str]] = []
+
+        code = run_shell(
+            self.root,
+            dispatcher=lambda argv: calls.append(argv) or 0,
+            input_func=self._input(["deploy demo", "n", "register demo", "y", "quit"]),
+            output=output,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, [["--root", str(self.root), "register", "demo"]])
+        text = output.getvalue()
+        self.assertIn("PluginCtl will copy plugin files", text)
+        self.assertIn("PluginCtl will execute CREATE EXTENSION", text)
 
     def test_list_maps_to_existing_list_command(self) -> None:
         output = io.StringIO()

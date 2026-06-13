@@ -137,6 +137,23 @@ class MainFlowCliTest(unittest.TestCase):
         for key in ["lint", "plan", "precheck", "diagnose", "errors"]:
             self.assertIn(key, payload)
 
+    def test_check_path_auto_adds_plugin_without_polluting_json(self) -> None:
+        catalog_file = Path(self.tempdir.name) / "catalog.json"
+        plugin_parent = Path(self.tempdir.name) / "plugins"
+        plugin_dir = plugin_parent / "path_check_plugin"
+        with patch.dict(os.environ, {"PLUGIN_CTL_CATALOG_FILE": str(catalog_file)}):
+            self.assertEqual(
+                self._run(["--root", str(self.root), "dev", "init", "path_check_plugin", "--dir", str(plugin_parent)])[0],
+                0,
+            )
+            with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):
+                code, output = self._run(["--root", str(self.root), "check", str(plugin_dir), "--json"])
+
+            self.assertEqual(code, 0)
+            payload = json.loads(output)
+            self.assertEqual(payload["plugin_id"], "path_check_plugin")
+            self.assertTrue(payload["ok"])
+
     def test_check_returns_nonzero_for_blocking_lint_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
@@ -196,6 +213,26 @@ payload:
         self.assertIn("Activate: skipped", output)
         self.assertIn("CREATE EXTENSION: not executed", output)
         self.assertIn("Result: OK", output)
+
+    def test_deploy_path_auto_adds_then_distributes(self) -> None:
+        catalog_file = Path(self.tempdir.name) / "catalog.json"
+        plugin_parent = Path(self.tempdir.name) / "plugins"
+        plugin_dir = plugin_parent / "path_deploy_plugin"
+        fake = FakeRemoteExecutor()
+
+        with patch.dict(os.environ, {"PLUGIN_CTL_CATALOG_FILE": str(catalog_file)}):
+            self.assertEqual(
+                self._run(["--root", str(self.root), "dev", "init", "path_deploy_plugin", "--dir", str(plugin_parent)])[0],
+                0,
+            )
+            with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
+                code, output = self._run(["--root", str(self.root), "deploy", str(plugin_dir), "-f", str(self.cluster_file)])
+
+            self.assertEqual(code, 0)
+            self.assertTrue(fake.copies)
+            self.assertIn("Registered plugin: path_deploy_plugin", output)
+            self.assertIn("Plugin: path_deploy_plugin", output)
+            self.assertIn("Result: OK", output)
 
     def test_deploy_uses_default_cluster_config_when_file_is_omitted(self) -> None:
         fake = FakeRemoteExecutor()

@@ -9,7 +9,7 @@ description = "CLI-first lifecycle governance tool for OpenTenBase distributed p
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "Codex" }]
+authors = [{ name = "iamkuangzhang" }]
 dependencies = [
     "PyYAML>=6.0",
 ]

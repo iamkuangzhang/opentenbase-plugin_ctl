@@ -2,11 +2,11 @@
 
 [English](README.md)
 
-OpenTenBase PluginCtl 是一个面向 OpenTenBase 的插件生命周期治理工具。
+OpenTenBase PluginCtl 是一个面向 OpenTenBase 的命令行优先插件生命周期控制台。
 
-它关注插件包的发现、检查、规划、部署、注册、验证、回滚、归档和报告。它不是通用 OpenTenBase 运维平台，不是 Web 控制台，也不是插件市场。
+它关注插件包的发现、物理分发、扩展注册、健康检查、回滚和报告。它不是 OpenTenBase 集群运维平台，不是 Web 控制台，也不是插件市场。
 
-当前支持的命令入口是：
+公开入口是：
 
 ```bash
 plugin_ctl
@@ -23,280 +23,133 @@ python -m pip install -e .
 验证：
 
 ```bash
-plugin_ctl list
 plugin_ctl --help
-```
-
-## 接入外部插件
-
-PluginCtl 不要求你把插件复制到它的安装目录。你可以把插件包放在任意位置，只要插件目录里有 `manifest.yml` 或 `plugin.yml`，然后登记这个路径：
-
-```bash
-plugin_ctl add /path/to/xxx_plugin
 plugin_ctl list
-plugin_ctl inspect xxx_plugin
 ```
 
-这个命令只会把路径写入当前用户的 `~/.plugin_ctl/catalog.json`，插件文件仍然留在原目录。删除登记项：
+## 主流程
 
-```bash
-plugin_ctl remove xxx_plugin
-```
-
-## 开发一个插件
-
-生成一个适合新手学习的 OpenTenBase / PostgreSQL extension 插件骨架：
-
-```bash
-plugin_ctl dev init my_plugin
-plugin_ctl add ./my_plugin
-plugin_ctl check my_plugin
-plugin_ctl deploy my_plugin
-plugin_ctl register my_plugin
-plugin_ctl verify my_plugin
-plugin_ctl report
-```
-
-`dev init` 会生成一个带中文注释的 SQL-only 插件目录，包括 `manifest.yml`、`.control` 文件、安装 SQL、验证 SQL、回滚 SQL、`.pluginctlignore` 和入门 README。它用于理解 extension 基础结构和 PluginCtl 生命周期流程；第一版不编译 C 代码，也不生成 `.so` 文件。
-
-你也可以指定父目录，或者覆盖本命令生成的文件：
-
-```bash
-plugin_ctl dev init my_plugin --dir ./plugins
-plugin_ctl dev init my_plugin --dir ./plugins --force
-```
-
-## 5 分钟试用
-
-建议先测试内置的 `pluginctl_smoke_plugin`。它是安全样例插件，用来验证 PluginCtl 自己的生命周期能力。
-
-```bash
-plugin_ctl init
-plugin_ctl list
-plugin_ctl inspect pluginctl_smoke_plugin
-plugin_ctl check pluginctl_smoke_plugin
-plugin_ctl deploy pluginctl_smoke_plugin
-plugin_ctl register pluginctl_smoke_plugin
-plugin_ctl verify pluginctl_smoke_plugin
-plugin_ctl report
-```
-
-回滚会执行 manifest 声明的回滚 SQL。如果只想预览，请先加 `--dry-run`：
-
-```bash
-plugin_ctl rollback pluginctl_smoke_plugin --dry-run
-plugin_ctl rollback pluginctl_smoke_plugin
-plugin_ctl verify pluginctl_smoke_plugin --removed
-```
-
-## 交互式插件控制台
-
-直接运行：
+普通用户建议先进入交互式控制台：
 
 ```bash
 plugin_ctl
 ```
 
-或者显式进入：
-
-```bash
-plugin_ctl shell
-```
-
-示例：
+然后输入短命令：
 
 ```text
-OpenTenBase PluginCtl Shell
-Type "help" to show commands.
-Type "quit" or "exit" to leave.
-
-pluginctl> list
 pluginctl> init
-pluginctl> dev init my_plugin
-pluginctl> add /path/to/xxx_plugin
-pluginctl> check pluginctl_smoke_plugin
-pluginctl> deploy pluginctl_smoke_plugin
-pluginctl> register pluginctl_smoke_plugin
-pluginctl> verify pluginctl_smoke_plugin
-pluginctl> plugin lint pluginctl_smoke_plugin
-pluginctl> plugin diagnose pluginctl_smoke_plugin
-pluginctl> plugin archive list
-pluginctl> plugins status --json
-pluginctl> cluster inspect
-pluginctl> report
-pluginctl> remove xxx_plugin
+pluginctl> new my_plugin
+pluginctl> list
+pluginctl> deploy my_plugin
+pluginctl> register my_plugin
+pluginctl> check my_plugin
 pluginctl> quit
 ```
 
-PluginCtl Shell 是插件生命周期控制台，支持和 `plugin_ctl` 基本一致的命令组；进入 shell 后省略前面的 `plugin_ctl`，直接输入子命令即可。它不是 OpenTenBase 集群控制台，不负责集群启动、停止、初始化或监控。
+`init` 会读取当前已经启动的 OpenTenBase 拓扑，并写入 PluginCtl 默认的 `cluster.toml`。它不负责启动、停止、初始化或监控 OpenTenBase 集群。
 
-## 分布式流程
+## 接入已有插件目录
 
-复制并修改拓扑文件：
+插件不需要复制到 PluginCtl 安装目录。只要某个插件目录里有 `manifest.yml` 或 `plugin.yml`，就可以直接部署：
 
-```bash
-plugin_ctl init
+```text
+pluginctl> init
+pluginctl> deploy ./my_existing_plugin
+pluginctl> register my_existing_plugin
+pluginctl> check my_existing_plugin
 ```
 
-检查拓扑：
+`deploy ./my_existing_plugin` 会先自动把插件加入用户 catalog，再执行部署。插件文件仍然留在原目录。
 
-```bash
-plugin_ctl cluster inspect
+## 公开命令
+
+在 `plugin_ctl` 交互控制台里，普通用户只需要记住这些：
+
+```text
+help
+init
+new <plugin_id>
+list [plugin_id]
+deploy <plugin_id_or_path>
+register <plugin_id>
+check <plugin_id_or_path>
+rollback <plugin_id>
+quit
+exit
 ```
 
-预览或执行物理文件分发。`deploy` 必须先有 `cluster.toml`；请先执行 `plugin_ctl init`，或者手动传入 `-f cluster.toml`。
+需要兼容命令和调试命令时，输入：
 
-```bash
-plugin_ctl deploy pluginctl_smoke_plugin --dry-run
-plugin_ctl deploy pluginctl_smoke_plugin
+```text
+help advanced
 ```
 
-预览或执行扩展注册：
+## 命令含义
 
-```bash
-plugin_ctl register pluginctl_smoke_plugin --dry-run
-plugin_ctl register pluginctl_smoke_plugin
-```
+`new <plugin_id>`：创建一个适合新手学习的插件模板，并自动加入 PluginCtl 管理。
 
-验证：
+`list`：列出已识别的插件。`list <plugin_id>`：查看某个插件的 manifest 和最近操作记录。
 
-```bash
-plugin_ctl verify pluginctl_smoke_plugin
-plugin_ctl plugin consistency pluginctl_smoke_plugin
-plugin_ctl report
-```
+`deploy <plugin_id_or_path>`：把插件包文件复制到 OpenTenBase 的 CN/DN 扩展目录。如果传入的是目录或 manifest 路径，会自动先登记插件。
 
-重要边界：
+`register <plugin_id>`：只在 primary coordinator 上执行一次 `CREATE EXTENSION`，然后只读检查其他 coordinator 的 `pg_extension` 视图是否一致。
 
-- `deploy` 永远要求集群配置。它不再回退到旧的本地 install SQL 逻辑。
-- `deploy` 只分发插件载荷文件，不执行 `CREATE EXTENSION`；`deploy --dry-run` 只预览。
-- `register` 只在 `cluster.toml` 中第一个 coordinator 上执行一次 `CREATE EXTENSION`，然后只读检查其他 coordinator 的 `pg_extension` 视图；`register --dry-run` 只预览。
-- `activate` 仅作为 `register` 的旧兼容别名保留。新的文档和脚本应统一使用 `register`。
+`check <plugin_id_or_path>`：执行一站式插件体检，包括包结构检查、计划、预检查、诊断和当前状态建议。
 
-## 命令清单
+`rollback <plugin_id>`：执行 manifest 声明的回滚 SQL。交互式 shell 中，修改性命令执行前会先询问确认。
 
-插件发现：
+## 安全边界
+
+只读或近似只读命令包括 `list`、`check`、`help`、`help advanced`。
+
+会修改环境的命令包括：
+
+- `deploy`：向 CN/DN 节点复制插件文件。
+- `register`：在 primary coordinator 上执行 `CREATE EXTENSION`。
+- `rollback`：执行回滚 SQL。
+
+`activate` 仅作为 `register` 的旧兼容别名保留。新的文档和脚本应统一使用 `register`。
+
+## 高级兼容命令
+
+旧命令仍然保留给脚本和调试使用，但不再作为新手主流程：
 
 ```bash
 plugin_ctl add <plugin_dir_or_manifest>
 plugin_ctl remove <plugin_id>
-plugin_ctl list
 plugin_ctl inspect <plugin_id>
-plugin_ctl plugin add <plugin_dir_or_manifest>
-plugin_ctl plugin remove <plugin_id>
-```
-
-源码迁移评估：
-
-```bash
-plugin_ctl assess <pg_extension_source_path>
-plugin_ctl assess <pg_extension_source_path> --json
-```
-
-插件开发：
-
-```bash
 plugin_ctl dev init <plugin_id>
-plugin_ctl dev init <plugin_id> --dir <target_dir>
-plugin_ctl dev init <plugin_id> --force
-```
-
-插件治理：
-
-```bash
-plugin_ctl check <plugin_id>
 plugin_ctl plugin lint <plugin_id>
 plugin_ctl plugin plan <plugin_id>
 plugin_ctl plugin precheck <plugin_id>
 plugin_ctl plugin diagnose <plugin_id>
-plugin_ctl plugin status <plugin_id>
-plugin_ctl plugins status
-```
-
-生命周期：
-
-```bash
-plugin_ctl deploy <plugin_id>
-plugin_ctl verify <plugin_id>
-plugin_ctl rollback <plugin_id> --dry-run
-plugin_ctl rollback <plugin_id>
-plugin_ctl verify <plugin_id> --removed
-```
-
-分布式插件治理：
-
-```bash
-plugin_ctl init
-plugin_ctl cluster inspect
-plugin_ctl deploy <plugin_id> --dry-run
-plugin_ctl deploy <plugin_id>
-plugin_ctl register <plugin_id> --dry-run
-plugin_ctl register <plugin_id>
-plugin_ctl verify <plugin_id>
 plugin_ctl plugin roles <plugin_id>
 plugin_ctl plugin consistency <plugin_id>
-plugin_ctl cluster distribute <plugin_id> --dry-run
-plugin_ctl cluster distribute <plugin_id>
-```
-
-归档和报告：
-
-```bash
 plugin_ctl plugin archive list
-plugin_ctl plugin archive inspect <plugin_id>
-plugin_ctl state <plugin_id>
 plugin_ctl report
-plugin_ctl report --json
-```
-
-运行时检查：
-
-```bash
-plugin_ctl doctor
-plugin_ctl cluster status
 ```
 
 ## 内置插件
 
-- `pluginctl_smoke_plugin`：安全样例插件，推荐用于完整生命周期测试。
-- `otb_timeseries`：真实 OpenTenBase 时序插件的 reference manifest。不要对它执行破坏性 rollback。
-- 其他 legacy `otb_*` manifest：适合做插件包治理检查，不代表生产可用插件包。
+- `pluginctl_smoke_plugin`：安全样例插件，用来测试 PluginCtl 完整生命周期。
+- `otb_timeseries`：真实时序插件载荷的参考 manifest，不应由 PluginCtl 做破坏性回滚。
+- `otb_*` 旧 manifest：可用于插件包治理检查，不代表生产可用插件包。
 
-## 仓库结构
-
-```text
-catalog/plugins/       reference manifests
-examples/plugins/      bundled sample plugins and fixtures
-recipes/               smoke verification SQL
-src/plugin_ctl/        Python implementation
-tests/                 unit tests
-docs/                  design and release documents
-cluster.toml.example   distributed topology example
-```
-
-## 安全边界
-
-只读或近似只读命令包括 `list`、`inspect`、`assess`、`plugin lint`、`plugin plan`、`plugin precheck`、`plugin diagnose`、`plugin roles`、`plugin consistency`、`plugin archive list`、`plugin archive inspect`、`plugins status`、`verify -f` 和 `report`。
-
-会修改数据库或文件系统的命令：
-
-- `add <plugin_dir_or_manifest>` 和 `remove <plugin_id>` 只修改本地 PluginCtl 用户 catalog。
-- `init` 会读取 `pgxc_node` 并写入默认集群配置；它不会启动或停止 OpenTenBase。
-- `deploy <plugin_id>` 会通过 `scp` 分发远程文件，不执行 `CREATE EXTENSION`；`deploy --dry-run` 只预览。
-- `register <plugin_id>` 会在 primary coordinator 上执行 `CREATE EXTENSION`；`register --dry-run` 只预览。
-- `rollback <plugin_id>` 会执行 manifest 声明的回滚 SQL；`rollback --dry-run` 只预览。
-
-当前 role hooks 只进入计划和展示，不会自动执行。
-
-## 开发
+## 运行测试
 
 ```bash
 python -m unittest discover -s tests -v
-git diff --check
 ```
 
-当前测试基线：
+当前推荐的最短流程：
 
 ```text
-147 tests
+plugin_ctl
+pluginctl> init
+pluginctl> new my_plugin
+pluginctl> deploy my_plugin
+pluginctl> register my_plugin
+pluginctl> check my_plugin
+pluginctl> quit
 ```

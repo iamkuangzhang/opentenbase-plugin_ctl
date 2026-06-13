@@ -15,26 +15,37 @@ Type "quit" or "exit" to leave.
 
 HELP_TEXT = """Available commands:
   help
-  shell
+  help advanced
   init
+  new <plugin_id>
+  list [plugin_id]
+  deploy <plugin_id_or_path>
+  register <plugin_id>
+  check <plugin_id_or_path>
+  rollback <plugin_id> [options]
+  quit
+  exit
+
+PluginCtl Shell manages plugin discovery, checks, deployment, registration,
+rollback, and reports. "init" only initializes PluginCtl's cluster.toml from a
+running OpenTenBase cluster; it does not start, stop, initialize, or monitor an
+OpenTenBase cluster.
+"""
+
+
+ADVANCED_HELP_TEXT = """Advanced and compatibility commands:
   add <plugin_dir_or_manifest>
   remove <plugin_id>
-  list
   inspect <plugin_id>
-  check <plugin_id>
   assess <pg_extension_source_path> [--json]
   diagnose <plugin_id>
-  deploy <plugin_id> [options]
-  register <plugin_id> [options]
   activate <plugin_id> [options]
   verify <plugin_id> [options]
-  rollback <plugin_id> [options]
   state [plugin_id]
   report [options]
   doctor
   dev init <plugin_id> [--dir <target_dir>] [--force]
 
-Plugin governance:
   plugin add <plugin_dir_or_manifest>
   plugin remove <plugin_id>
   plugin check <plugin_id>
@@ -54,20 +65,13 @@ Cluster and distributed plugin commands:
   cluster init
   cluster inspect
   cluster distribute <plugin_id> [--dry-run]
-
-  quit
-  exit
-
-PluginCtl Shell manages plugin discovery, checks, deployment, registration,
-verification, rollback, and reports. "init" only initializes PluginCtl's
-cluster.toml from a running OpenTenBase cluster; it does not start, stop,
-initialize, or monitor an OpenTenBase cluster.
 """
 
 
 TOP_LEVEL_COMMANDS = {
     "add",
     "remove",
+    "new",
     "list",
     "inspect",
     "check",
@@ -110,6 +114,31 @@ def translate_shell_command(parts: list[str]) -> list[str] | None:
     return None
 
 
+def _needs_confirmation(argv: list[str]) -> bool:
+    if not argv:
+        return False
+    if "--dry-run" in argv or "-h" in argv or "--help" in argv:
+        return False
+    return argv[0] in {"deploy", "register", "rollback"}
+
+
+def _confirm(argv: list[str], input_func: InputFunc, out: TextIO) -> bool:
+    if not _needs_confirmation(argv):
+        return True
+    command = argv[0]
+    if command == "deploy":
+        print("PluginCtl will copy plugin files to OpenTenBase CN/DN nodes.", file=out)
+    elif command == "register":
+        print("PluginCtl will execute CREATE EXTENSION on the primary coordinator.", file=out)
+    elif command == "rollback":
+        print("PluginCtl will execute rollback SQL.", file=out)
+    answer = input_func("Continue? [y/N]: ").strip().lower()
+    if answer in {"y", "yes"}:
+        return True
+    print("Cancelled.", file=out)
+    return False
+
+
 def _default_dispatcher(argv: list[str]) -> int:
     from .cli import main
 
@@ -146,6 +175,9 @@ def run_shell(
         if line == "help":
             print(HELP_TEXT, file=out)
             continue
+        if line == "help advanced":
+            print(ADVANCED_HELP_TEXT, file=out)
+            continue
         if line == "shell":
             print("Already in PluginCtl Shell.", file=out)
             continue
@@ -161,6 +193,8 @@ def run_shell(
             print('Unknown command. Type "help" to show commands.', file=out)
             continue
         if not argv:
+            continue
+        if not _confirm(argv, input_func, out):
             continue
 
         try:

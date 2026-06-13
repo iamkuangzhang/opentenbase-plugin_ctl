@@ -75,6 +75,7 @@ TOP_LEVEL_COMMANDS = {
     "shell",
     "add",
     "remove",
+    "new",
     "list",
     "inspect",
     "check",
@@ -93,6 +94,35 @@ TOP_LEVEL_COMMANDS = {
     "rollback",
     "report",
 }
+
+
+class PluginCtlArgumentParser(argparse.ArgumentParser):
+    def format_help(self) -> str:
+        return """usage: plugin_ctl [-h] [--version] [--root ROOT] {shell,init,new,list,deploy,register,check,rollback} ...
+
+OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.
+
+positional arguments:
+  {shell,init,new,list,deploy,register,check,rollback}
+    shell               interactive plugin lifecycle shell
+    init                discover pgxc_node and write the default cluster.toml
+    new                 create a starter plugin and add it to PluginCtl
+    list                list plugins or show one plugin
+    deploy              add if needed, then copy plugin files to OpenTenBase nodes
+    register            run CREATE EXTENSION once on the primary coordinator
+    check               run all-in-one plugin health and governance checks
+    rollback            run manifest-declared rollback SQL
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+  --root ROOT           platform directory root
+
+Type "plugin_ctl" to enter the interactive shell.
+Inside the shell, type "help advanced" for compatibility and debugging commands.
+
+groups: discovery, governance, lifecycle, archive, distributed, reporting, runtime
+"""
 
 
 def platform_root() -> Path:
@@ -135,12 +165,12 @@ def _root_from_global_args(argv: list[str]) -> Path:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = PluginCtlArgumentParser(
         prog="plugin_ctl",
         description="OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.",
         epilog=(
-            "main flow: init -> check -> deploy -> register -> verify -> report; "
-            "development: dev init; advanced/debug: plugin lint/plan/precheck/diagnose, cluster distribute; "
+            "main flow: init -> new/list -> deploy -> register -> check -> rollback; "
+            "advanced/debug: plugin lint/plan/precheck/diagnose, cluster distribute; "
             "other groups: discovery=list/inspect; lifecycle=rollback; archive=plugin archive list/inspect; "
             "distributed=plugin roles/consistency; runtime=doctor/cluster status"
         ),
@@ -148,24 +178,32 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--root", type=Path, default=platform_root(), help="platform directory root")
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        metavar="{shell,init,new,list,deploy,register,check,rollback}",
+        parser_class=argparse.ArgumentParser,
+    )
 
     subparsers.add_parser("shell", help="interactive plugin lifecycle shell")
-    add_parser = subparsers.add_parser("add", help="discovery: register an external plugin directory or manifest")
+    add_parser = subparsers.add_parser("add", help=argparse.SUPPRESS)
     add_parser.add_argument("plugin_path", type=Path)
-    remove_parser = subparsers.add_parser("remove", help="discovery: remove a user-registered plugin")
+    remove_parser = subparsers.add_parser("remove", help=argparse.SUPPRESS)
     remove_parser.add_argument("plugin_id")
-    subparsers.add_parser("list", help="discovery: list plugin manifests")
+    new_parser = subparsers.add_parser("new", help="main flow: create a starter plugin and add it to PluginCtl")
+    new_parser.add_argument("plugin_id")
+    list_parser = subparsers.add_parser("list", help="main flow: list plugins or show one plugin")
+    list_parser.add_argument("plugin_id", nargs="?")
 
-    inspect_parser = subparsers.add_parser("inspect", help="discovery: show a plugin manifest")
+    inspect_parser = subparsers.add_parser("inspect", help=argparse.SUPPRESS)
     inspect_parser.add_argument("plugin_id")
 
     check_parser = subparsers.add_parser("check", help="main flow: aggregate lint, plan, precheck, and diagnose")
-    check_parser.add_argument("plugin_id")
+    check_parser.add_argument("plugin_id_or_path")
     check_parser.add_argument("--json", action="store_true", help="emit aggregated check result as JSON")
     check_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help="human output language")
 
-    assess_parser = subparsers.add_parser("assess", help="governance: statically assess PostgreSQL extension source migration risks")
+    assess_parser = subparsers.add_parser("assess", help=argparse.SUPPRESS)
     assess_parser.add_argument("source_path", type=Path)
     assess_parser.add_argument("--json", action="store_true", help="emit assessment result as JSON")
 
@@ -177,7 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     register_parser = subparsers.add_parser("register", help="main flow: register extension metadata once, then verify CN views")
     add_register_args(register_parser)
-    activate_parser = subparsers.add_parser("activate", help="deprecated alias for register")
+    activate_parser = subparsers.add_parser("activate", help=argparse.SUPPRESS)
     add_register_args(activate_parser)
 
     def add_cluster_init_args(command_parser: argparse.ArgumentParser) -> None:
@@ -193,21 +231,21 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser = subparsers.add_parser("init", help="discover pgxc_node and write the default cluster.toml")
     add_cluster_init_args(init_parser)
 
-    doctor_parser = subparsers.add_parser("doctor", help="runtime: check local OpenTenBase runtime")
+    doctor_parser = subparsers.add_parser("doctor", help=argparse.SUPPRESS)
     doctor_parser.add_argument("--container", default="opentenbaseDN1")
     doctor_parser.add_argument("--host", default="127.0.0.1")
     doctor_parser.add_argument("--port", type=int, default=30004)
     doctor_parser.add_argument("--user", default="opentenbase")
     doctor_parser.add_argument("--database", default="postgres")
 
-    dev_parser = subparsers.add_parser("dev", help="developer helpers for creating plugin packages")
+    dev_parser = subparsers.add_parser("dev", help=argparse.SUPPRESS)
     dev_subparsers = dev_parser.add_subparsers(dest="dev_command", required=True)
     dev_init_parser = dev_subparsers.add_parser("init", help="create a starter plugin skeleton")
     dev_init_parser.add_argument("plugin_id")
     dev_init_parser.add_argument("--dir", type=Path, default=None, help="parent directory for the generated plugin directory")
     dev_init_parser.add_argument("--force", action="store_true", help="overwrite files generated by dev init")
 
-    cluster_parser = subparsers.add_parser("cluster", help="runtime/distributed: inspect OpenTenBase cluster status and topology")
+    cluster_parser = subparsers.add_parser("cluster", help=argparse.SUPPRESS)
     cluster_subparsers = cluster_parser.add_subparsers(dest="cluster_command", required=True)
     cluster_subparsers.add_parser("status", help="read-only local Docker/OpenTenBase status")
     cluster_init_parser = cluster_subparsers.add_parser("init", help="discover pgxc_node and write the default cluster.toml")
@@ -221,7 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
     cluster_distribute_parser.add_argument("plugin_id")
     cluster_distribute_parser.add_argument("--json", action="store_true", help="emit distribution plan/result as JSON")
 
-    plugin_parser = subparsers.add_parser("plugin", help="plugin governance, archive, and distributed checks")
+    plugin_parser = subparsers.add_parser("plugin", help=argparse.SUPPRESS)
     plugin_subparsers = plugin_parser.add_subparsers(dest="plugin_command", required=True)
     plugin_add_parser = plugin_subparsers.add_parser("add", help="discovery: register an external plugin directory or manifest")
     plugin_add_parser.add_argument("plugin_path", type=Path)
@@ -263,7 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     plugin_archive_inspect_parser.add_argument("plugin_id")
     plugin_archive_inspect_parser.add_argument("--json", action="store_true", help="emit archive record as JSON")
 
-    plugins_parser = subparsers.add_parser("plugins", help="governance: multi-plugin governance commands")
+    plugins_parser = subparsers.add_parser("plugins", help=argparse.SUPPRESS)
     plugins_subparsers = plugins_parser.add_subparsers(dest="plugins_command", required=True)
     plugins_status_parser = plugins_subparsers.add_parser("status", help="governance: show governance status for all plugins")
     plugins_status_parser.add_argument("--json", action="store_true", help="emit plugin governance status as JSON")
@@ -277,7 +315,7 @@ def build_parser() -> argparse.ArgumentParser:
         "report": "reporting: show latest action report",
     }
     for name in ["deploy", "verify", "state", "rollback", "report"]:
-        cmd = subparsers.add_parser(name, help=command_help[name])
+        cmd = subparsers.add_parser(name, help=command_help[name] if name in {"deploy", "rollback"} else argparse.SUPPRESS)
         if name in {"deploy", "verify", "state", "rollback"}:
             cmd.add_argument("plugin_id", nargs="?")
         if name == "verify":
@@ -295,6 +333,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _looks_like_plugin_path(value: str) -> bool:
+    path = Path(value).expanduser()
+    return path.exists() or "/" in value or "\\" in value or value.endswith((".yml", ".yaml"))
+
+
+def ensure_plugin_registered(root: Path, plugin_id_or_path: str, *, announce: bool = True) -> tuple[str, bool, Path | None]:
+    if not _looks_like_plugin_path(plugin_id_or_path):
+        return plugin_id_or_path, False, None
+    manifest, catalog_path = Catalog(root=root).add_user_plugin(Path(plugin_id_or_path))
+    if announce:
+        print(f"Registered plugin: {manifest.plugin_id}")
+        print(f"Manifest: {manifest.path}")
+        print(f"Plugin root: {manifest.project_root}")
+        print(f"User catalog: {catalog_path}")
+    return manifest.plugin_id, True, catalog_path
+
+
 def cmd_list(root: Path) -> int:
     catalog = Catalog(root=root)
     manifests = catalog.load_all()
@@ -304,6 +359,22 @@ def cmd_list(root: Path) -> int:
 
     rows = [[m.plugin_id, m.name, m.version, m.payload.get("source_root", "")] for m in manifests]
     print(render_table(["plugin_id", "name", "version", "source_root"], rows))
+    return 0
+
+
+def cmd_list_one(root: Path, plugin_id: str) -> int:
+    cmd_inspect(root, plugin_id)
+    records = [record for record in StateStore(root).all() if record.plugin_id == plugin_id]
+    if records:
+        print("Recent actions:")
+        print(
+            render_table(
+                ["plugin_id", "action", "ok", "version", "stage", "returncode", "duration_ms", "stdout", "stderr", "timestamp", "detail"],
+                latest_by_plugin_action(records),
+            )
+        )
+    else:
+        print("Recent actions: none")
     return 0
 
 
@@ -348,6 +419,21 @@ def cmd_dev_init(plugin_id: str, *, base_dir: Path | None = None, force: bool = 
     print(f"  plugin_ctl register {plugin_id}")
     print(f"  plugin_ctl verify {plugin_id}")
     print("  plugin_ctl report")
+    return 0
+
+
+def cmd_new(root: Path, plugin_id: str) -> int:
+    result = create_plugin_skeleton(plugin_id)
+    manifest, catalog_path = Catalog(root=root).add_user_plugin(result.target_dir)
+    print(f"Plugin created and added: {manifest.plugin_id}")
+    print(f"Path: {_display_path(result.target_dir)}")
+    print(f"Manifest: {manifest.path}")
+    print(f"User catalog: {catalog_path}")
+    print()
+    print("Next:")
+    print(f"  deploy {manifest.plugin_id}")
+    print(f"  register {manifest.plugin_id}")
+    print(f"  check {manifest.plugin_id}")
     return 0
 
 
@@ -1313,12 +1399,17 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_add(args.root, args.plugin_path)
         if args.command == "remove":
             return cmd_remove(args.root, args.plugin_id)
+        if args.command == "new":
+            return cmd_new(args.root, args.plugin_id)
         if args.command == "list":
+            if args.plugin_id:
+                return cmd_list_one(args.root, args.plugin_id)
             return cmd_list(args.root)
         if args.command == "inspect":
             return cmd_inspect(args.root, args.plugin_id)
         if args.command == "check":
-            return cmd_check(args.root, args.plugin_id, as_json=args.json, lang=args.lang)
+            plugin_id, _, _ = ensure_plugin_registered(args.root, args.plugin_id_or_path, announce=not args.json)
+            return cmd_check(args.root, plugin_id, as_json=args.json, lang=args.lang)
         if args.command == "assess":
             return cmd_assess(args.source_path, as_json=args.json)
         if args.command == "register":
@@ -1384,6 +1475,7 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_report(args.root, as_json=args.json)
         if args.command == "deploy":
             plugin_id = args.plugin_id or "otb_timeseries"
+            plugin_id, _, _ = ensure_plugin_registered(args.root, plugin_id)
             return cmd_deploy_physical_distribution(
                 args.root,
                 plugin_id,

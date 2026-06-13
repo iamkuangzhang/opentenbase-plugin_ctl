@@ -142,9 +142,41 @@ class DevInitTest(unittest.TestCase):
                 self.assertEqual(check_code, 0)
                 self.assertIn("Result: OK", check_output)
 
+    def test_new_generates_plugin_and_adds_to_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            catalog_file = tmp / "home" / "catalog.json"
+            env = {"PLUGIN_CTL_CATALOG_FILE": str(catalog_file)}
+            old_cwd = Path.cwd()
+
+            try:
+                os.chdir(tmp)
+                with patch.dict(os.environ, env):
+                    code, output = self.run_cli(["--root", str(self.root), "new", "my_plugin"])
+
+                    self.assertEqual(code, 0)
+                    self.assertIn("Plugin created and added: my_plugin", output)
+                    self.assertTrue((tmp / "my_plugin" / "manifest.yml").exists())
+                    manifest = Catalog(root=self.root).load_one("my_plugin")
+                    self.assertEqual(manifest.plugin_id, "my_plugin")
+                    self.assertEqual(manifest.project_root, tmp / "my_plugin")
+            finally:
+                os.chdir(old_cwd)
+
+    def test_list_plugin_id_shows_details_and_recent_actions(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = main(["--root", str(self.root), "list", "pluginctl_smoke_plugin"])
+
+        self.assertEqual(code, 0)
+        text = output.getvalue()
+        self.assertIn('"plugin_id": "pluginctl_smoke_plugin"', text)
+        self.assertIn("Recent actions:", text)
+
     def test_shell_maps_dev_init(self) -> None:
         from plugin_ctl.shell import translate_shell_command
 
+        self.assertEqual(translate_shell_command(["new", "my_plugin"]), ["new", "my_plugin"])
         self.assertEqual(translate_shell_command(["dev", "init", "my_plugin"]), ["dev", "init", "my_plugin"])
         self.assertEqual(
             translate_shell_command(["dev", "init", "my_plugin", "--dir", "./plugins", "--force"]),
