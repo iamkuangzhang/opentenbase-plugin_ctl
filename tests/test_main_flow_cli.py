@@ -198,6 +198,12 @@ payload:
             )
 
         self.assertEqual(code, 0)
+        self.assertIn("Deploy plan: pluginctl_smoke_plugin", output)
+        self.assertIn("Extension files -> extension_dir:", output)
+        self.assertIn("Library files -> lib_dir:", output)
+        self.assertIn("none (SQL-only plugin)", output)
+        self.assertIn("Coordinator nodes: 1 (cn001)", output)
+        self.assertIn("Datanode nodes: 1 (dn001)", output)
         self.assertIn("Mode: dry-run", output)
         self.assertIn("Activate: skipped", output)
         self.assertIn("CREATE EXTENSION: not executed", output)
@@ -212,6 +218,9 @@ payload:
 
         self.assertEqual(code, 0)
         self.assertTrue(fake.copies)
+        self.assertIn("Deploy plan: pluginctl_smoke_plugin", output)
+        self.assertIn("Extension files -> extension_dir:", output)
+        self.assertIn("Library files -> lib_dir:", output)
         self.assertIn("Mode: execute", output)
         self.assertIn("Physical distribution: executed", output)
         self.assertIn("Activate: skipped", output)

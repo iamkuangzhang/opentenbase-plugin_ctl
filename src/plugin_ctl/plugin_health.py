@@ -477,7 +477,7 @@ def _final_status(
     distributed_report: DistributedVerifyReport | None,
     cluster_path: Path | None,
 ) -> tuple[str, str]:
-    if any(item.status == "FAIL" for section in sections[:2] for item in section.items):
+    if any(item.status == "FAIL" for section in sections for item in section.items):
         return "BROKEN", "先修复 manifest、SQL/control 文件或插件包结构。"
     if not catalog_registered:
         return "NEW", "插件目录可检查，但还未进入 catalog；下一步可以执行 deploy <path>。"

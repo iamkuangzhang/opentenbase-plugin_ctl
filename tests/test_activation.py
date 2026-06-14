@@ -64,19 +64,32 @@ class FakeCoordinatorExecutor:
         self,
         *,
         versions: dict[str, str] | None = None,
+        available: bool = True,
+        registered: bool = False,
         fail_activate_for: str = "",
         fail_query_for: str = "",
     ) -> None:
         self.versions = versions or {"cn001": "0.1.0", "cn002": "0.1.0"}
+        self.available = available
+        self.registered = registered
         self.fail_activate_for = fail_activate_for
         self.fail_query_for = fail_query_for
         self.calls: list[tuple[str, str]] = []
 
     def run_sql(self, node: ClusterNode, sql: str) -> RemoteCommandResult:
         self.calls.append((node.name, sql))
+        if sql == "SELECT 1;":
+            return RemoteCommandResult(node=node.name, argv=("psql",), returncode=0, stdout="1\n", stderr="")
+        if "FROM pg_available_extensions" in sql:
+            stdout = "pluginctl_smoke_plugin\n" if self.available else ""
+            return RemoteCommandResult(node=node.name, argv=("psql",), returncode=0, stdout=stdout, stderr="")
+        if "SELECT extname FROM pg_extension" in sql:
+            stdout = "pluginctl_smoke_plugin\n" if self.registered else ""
+            return RemoteCommandResult(node=node.name, argv=("psql",), returncode=0, stdout=stdout, stderr="")
         if sql.startswith("CREATE EXTENSION"):
             if node.name == self.fail_activate_for:
                 return RemoteCommandResult(node=node.name, argv=("psql",), returncode=1, stdout="", stderr="activate failed")
+            self.registered = True
             return RemoteCommandResult(node=node.name, argv=("psql",), returncode=0, stdout="CREATE EXTENSION\n", stderr="")
         if node.name == self.fail_query_for:
             return RemoteCommandResult(node=node.name, argv=("psql",), returncode=1, stdout="", stderr="query failed")
@@ -184,14 +197,19 @@ class ActivationCliTest(unittest.TestCase):
         return code, output.getvalue()
 
     def test_register_dry_run_does_not_create_executor(self) -> None:
-        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("dry-run must not create psql executor")):
+        fake = FakeCoordinatorExecutor()
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=fake):
             code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run"])
 
         self.assertEqual(code, 0)
+        self.assertIn("Register precheck", output)
+        self.assertIn("pg_available_extensions", output)
+        self.assertIn("SQL to execute", output)
         self.assertIn("Mode: dry-run", output)
         self.assertIn("Physical distribution: not_executed", output)
         self.assertIn("Datanodes: not_connected", output)
         self.assertIn("CREATE EXTENSION: planned on primary CN only", output)
+        self.assertFalse(any(call[1].startswith("CREATE EXTENSION") for call in fake.calls))
 
     def test_register_defaults_to_execute_once_then_verifies_all_cn(self) -> None:
         fake = FakeCoordinatorExecutor()
@@ -199,6 +217,7 @@ class ActivationCliTest(unittest.TestCase):
             code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
 
         self.assertEqual(code, 0)
+        self.assertIn("Register precheck", output)
         self.assertIn("Mode: execute", output)
         self.assertIn("CREATE EXTENSION: executed on primary CN only", output)
         self.assertIn("Result: OK", output)
@@ -231,11 +250,31 @@ class ActivationCliTest(unittest.TestCase):
         self.assertEqual(payload["mode"], "execute")
         self.assertEqual(payload["physical_distribution"], "not_executed")
         self.assertEqual(payload["datanodes"], "not_connected")
-        for key in ["activation", "versions", "summary", "errors"]:
+        for key in ["activation", "versions", "summary", "errors", "precheck"]:
             self.assertIn(key, payload)
 
+    def test_register_blocks_when_extension_is_not_available(self) -> None:
+        fake = FakeCoordinatorExecutor(available=False)
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=fake):
+            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
+
+        self.assertEqual(code, 1)
+        self.assertIn("pg_available_extensions", output)
+        self.assertIn("CREATE EXTENSION: blocked by precheck", output)
+        self.assertFalse(any(call[1].startswith("CREATE EXTENSION") for call in fake.calls))
+
+    def test_register_skips_when_extension_is_already_registered(self) -> None:
+        fake = FakeCoordinatorExecutor(registered=True)
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=fake):
+            code, output = self._run(["--root", str(self.root), "register", "pluginctl_smoke_plugin", "-f", str(self.cluster_file)])
+
+        self.assertEqual(code, 0)
+        self.assertIn("already registered", output)
+        self.assertIn("CREATE EXTENSION: skipped", output)
+        self.assertFalse(any(call[1].startswith("CREATE EXTENSION") for call in fake.calls))
+
     def test_activate_alias_still_works_with_deprecation_notice(self) -> None:
-        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", side_effect=AssertionError("dry-run must not create psql executor")):
+        with patch("plugin_ctl.cli.PsqlCoordinatorExecutor", return_value=FakeCoordinatorExecutor()):
             code, output = self._run(["--root", str(self.root), "activate", "pluginctl_smoke_plugin", "-f", str(self.cluster_file), "--dry-run"])
 
         self.assertEqual(code, 0)

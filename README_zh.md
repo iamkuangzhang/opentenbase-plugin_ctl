@@ -91,13 +91,13 @@ help advanced
 
 `list`：列出已识别的插件。`list <plugin_id>`：查看某个插件的 manifest 和最近操作记录。
 
-`deploy <plugin_id_or_path>`：把插件包文件复制到 OpenTenBase 的 CN/DN 扩展目录。如果传入的是目录或 manifest 路径，会自动先登记插件。
+`deploy <plugin_id_or_path>`：把插件包文件复制到 OpenTenBase 的 CN/DN 扩展目录。复制前会先显示物理分发计划：`.control` / `.sql` 会进入 `extension_dir`，`.so` 会进入 `lib_dir`，纯 SQL 插件会明确显示没有 library 文件。
 
-`register <plugin_id>`：只在 primary coordinator 上执行一次 `CREATE EXTENSION`，然后只读检查其他 coordinator 的 `pg_extension` 视图是否一致。
+`register <plugin_id>`：先在 primary coordinator 上做只读预检。如果 `pg_available_extensions` 里没有该扩展，会阻断注册；如果 `pg_extension` 里已经存在，会跳过；否则只执行一次 `CREATE EXTENSION`，再只读检查其他 coordinator 的 `pg_extension` 视图是否一致。
 
 `check <plugin_id_or_path>`：执行一站式插件体检，包括包结构检查、计划、预检查、诊断和当前状态建议。
 
-`rollback <plugin_id>`：执行 manifest 声明的回滚 SQL。交互式 shell 中，修改性命令执行前会先询问确认。
+`rollback <plugin_id>`：执行 manifest 声明的回滚 SQL。它只回滚 SQL 声明的数据库对象，不会删除 CN/DN 节点上的 `.control`、`.sql`、`.so` 物理文件。交互式 shell 中，修改性命令会先显示 dry-run 预览，再询问确认。
 
 ## 一站式体检
 
@@ -111,7 +111,7 @@ pluginctl> check ./my_plugin/manifest.yml
 
 它会按六段输出：插件包结构、扩展文件、PluginCtl 管理状态、OpenTenBase 集群配置、分布式部署状态、注册与验证状态。
 
-最终状态包括 `NEW`、`READY`、`DEPLOYED`、`REGISTERED`、`BROKEN`、`REMOVED`、`UNKNOWN`。如果没有 `cluster.toml` 或数据库暂时连不上，会显示 `SKIP` 和下一步建议，不会直接崩溃。
+最终状态包括 `NEW`、`READY`、`DEPLOYED`、`REGISTERED`、`BROKEN`、`REMOVED`、`UNKNOWN`。只有 `FAIL` 项会让插件变成 `BROKEN`；`WARN`、`SKIP`、`INFO` 会作为提示和下一步建议展示，不会被当成致命错误。
 
 ## 安全边界
 
@@ -119,9 +119,9 @@ pluginctl> check ./my_plugin/manifest.yml
 
 会修改环境的命令包括：
 
-- `deploy`：向 CN/DN 节点复制插件文件。
-- `register`：在 primary coordinator 上执行 `CREATE EXTENSION`。
-- `rollback`：执行回滚 SQL。
+- `deploy`：显示物理分发计划后，向 CN/DN 节点复制插件文件。
+- `register`：先做预检，然后可能在 primary coordinator 上执行 `CREATE EXTENSION`。
+- `rollback`：只执行数据库对象回滚 SQL，不删除 CN/DN 上的插件物理文件。
 
 `activate` 仅作为 `register` 的旧兼容别名保留。新的文档和脚本应统一使用 `register`。
 

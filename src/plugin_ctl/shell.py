@@ -128,15 +128,44 @@ def _confirm(argv: list[str], input_func: InputFunc, out: TextIO) -> bool:
     command = argv[0]
     if command == "deploy":
         print("PluginCtl will copy plugin files to OpenTenBase CN/DN nodes.", file=out)
+        cancel_message = "Deploy cancelled."
     elif command == "register":
         print("PluginCtl will execute CREATE EXTENSION on the primary coordinator.", file=out)
+        cancel_message = "Register cancelled."
     elif command == "rollback":
         print("PluginCtl will execute rollback SQL.", file=out)
+        cancel_message = "Rollback cancelled."
+    else:
+        cancel_message = "Cancelled."
     answer = input_func("Continue? [y/N]: ").strip().lower()
     if answer in {"y", "yes"}:
         return True
-    print("Cancelled.", file=out)
+    print(cancel_message, file=out)
     return False
+
+
+def _preview_before_confirm(argv: list[str], root_args: list[str], dispatch: Dispatcher, out: TextIO) -> bool:
+    if not _needs_confirmation(argv):
+        return True
+    preview_argv = [*root_args, *argv, "--dry-run"]
+    print("Preview:", file=out)
+    try:
+        code = dispatch(preview_argv)
+    except SystemExit as exc:
+        code = int(exc.code or 0)
+        if code:
+            print(f"Preview exited with status {code}.", file=out)
+            return False
+    except KeyboardInterrupt:
+        print("", file=out)
+        return False
+    except Exception as exc:
+        print(f"Preview failed: {exc}", file=out)
+        return False
+    if code:
+        print(f"Preview exited with status {code}.", file=out)
+        return False
+    return True
 
 
 def _default_dispatcher(argv: list[str]) -> int:
@@ -193,6 +222,8 @@ def run_shell(
             print('Unknown command. Type "help" to show commands.', file=out)
             continue
         if not argv:
+            continue
+        if not _preview_before_confirm(argv, root_args, dispatch, out):
             continue
         if not _confirm(argv, input_func, out):
             continue

@@ -87,13 +87,13 @@ Use `help advanced` for compatibility and debugging commands.
 
 `list` shows known plugins. `list <plugin_id>` shows one plugin manifest and recent action records.
 
-`deploy <plugin_id_or_path>` copies plugin package files to the OpenTenBase CN/DN extension directories. If a path is passed, PluginCtl automatically registers the package path first.
+`deploy <plugin_id_or_path>` copies plugin package files to the OpenTenBase CN/DN extension directories. Before copying, PluginCtl prints a physical distribution plan: extension files (`.control` and `.sql`) go to `extension_dir`, library files (`.so`) go to `lib_dir`, and SQL-only plugins show `library none`.
 
-`register <plugin_id>` runs `CREATE EXTENSION` once on the primary coordinator, then checks other coordinators through read-only `pg_extension` queries.
+`register <plugin_id>` first runs read-only prechecks on the primary coordinator. It blocks if the extension is missing from `pg_available_extensions`, skips if it is already in `pg_extension`, otherwise runs `CREATE EXTENSION` once on the primary coordinator and checks other coordinators through read-only `pg_extension` queries.
 
 `check <plugin_id_or_path>` runs the all-in-one plugin check: package lint, plan, precheck, diagnose, and current status hints.
 
-`rollback <plugin_id>` executes the manifest-declared rollback SQL. In shell mode, modifying commands ask for confirmation before running.
+`rollback <plugin_id>` executes the manifest-declared rollback SQL. It only rolls back database objects declared by that SQL; it does not delete physical files from CN/DN nodes. In shell mode, modifying commands show a dry-run preview and ask for confirmation before running.
 
 ## One-Stop Check
 
@@ -107,7 +107,7 @@ pluginctl> check ./my_plugin/manifest.yml
 
 It prints six grouped sections: package structure, extension files, PluginCtl management state, OpenTenBase cluster config, distributed deployment state, and registration/verification state.
 
-Final statuses are `NEW`, `READY`, `DEPLOYED`, `REGISTERED`, `BROKEN`, `REMOVED`, and `UNKNOWN`. Missing `cluster.toml` or an unavailable database is reported as `SKIP` with a next-step hint instead of crashing.
+Final statuses are `NEW`, `READY`, `DEPLOYED`, `REGISTERED`, `BROKEN`, `REMOVED`, and `UNKNOWN`. Only `FAIL` items make a plugin `BROKEN`; `WARN`, `SKIP`, and `INFO` are reported with next-step hints instead of being treated as fatal.
 
 ## Safety Boundary
 
@@ -115,9 +115,9 @@ Read-only or mostly read-only commands include `list`, `check`, `help`, and `hel
 
 Modifying commands include:
 
-- `deploy`: copies files to CN/DN nodes.
-- `register`: runs `CREATE EXTENSION` on the primary coordinator.
-- `rollback`: runs rollback SQL.
+- `deploy`: copies files to CN/DN nodes after showing the physical distribution plan.
+- `register`: runs prechecks, then may run `CREATE EXTENSION` on the primary coordinator.
+- `rollback`: runs rollback SQL for database objects only; it does not delete CN/DN physical files.
 
 `activate` is kept only as a deprecated compatibility alias for `register`. New documents and scripts should use `register`.
 

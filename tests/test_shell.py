@@ -246,14 +246,17 @@ class PluginCtlShellTest(unittest.TestCase):
 
         def dispatch(argv: list[str]) -> int:
             calls.append(argv)
-            if len(calls) == 1:
+            if "--dry-run" in argv:
+                return 0
+            if len([call for call in calls if "--dry-run" not in call]) == 1:
                 raise PermissionError("state path is not writable")
             return 0
 
         code = run_shell(self.root, dispatcher=dispatch, input_func=self._input(["rollback demo", "y", "list", "quit"]), output=output)
 
         self.assertEqual(code, 0)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(calls[0], ["--root", str(self.root), "rollback", "demo", "--dry-run"])
         self.assertIn("Command failed: state path is not writable", output.getvalue())
 
     def test_modifying_shell_commands_confirm_before_dispatch(self) -> None:
@@ -268,9 +271,18 @@ class PluginCtlShellTest(unittest.TestCase):
         )
 
         self.assertEqual(code, 0)
-        self.assertEqual(calls, [["--root", str(self.root), "register", "demo"]])
+        self.assertEqual(
+            calls,
+            [
+                ["--root", str(self.root), "deploy", "demo", "--dry-run"],
+                ["--root", str(self.root), "register", "demo", "--dry-run"],
+                ["--root", str(self.root), "register", "demo"],
+            ],
+        )
         text = output.getvalue()
+        self.assertIn("Preview:", text)
         self.assertIn("PluginCtl will copy plugin files", text)
+        self.assertIn("Deploy cancelled.", text)
         self.assertIn("PluginCtl will execute CREATE EXTENSION", text)
 
     def test_list_maps_to_existing_list_command(self) -> None:

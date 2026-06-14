@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import sys
@@ -11,8 +12,10 @@ from .action_result import ActionResult
 from .activation import (
     PsqlCoordinatorExecutor,
     activation_report_json,
+    create_extension_sql,
     dry_run_activation_plan,
     execute_activation,
+    extension_name_for,
 )
 from .catalog import Catalog
 from .cluster import (
@@ -95,6 +98,28 @@ TOP_LEVEL_COMMANDS = {
     "rollback",
     "report",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class RegisterPrecheckItem:
+    name: str
+    status: str
+    detail: str
+    sql: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class RegisterPrecheckReport:
+    plugin_id: str
+    extension_name: str
+    primary_coordinator: str
+    sql: str
+    already_registered: bool
+    items: tuple[RegisterPrecheckItem, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not any(item.status == "FAIL" for item in self.items)
 
 
 class PluginCtlArgumentParser(argparse.ArgumentParser):
@@ -607,6 +632,54 @@ def _execute_distribution_json(config: ClusterConfig, plugin_id: str, results) -
     }
 
 
+def _render_distribution_plan(plan) -> None:
+    extension_entries = [
+        entry
+        for entry in plan.plan
+        if entry.file_type in {"extension_control", "sql"}
+    ]
+    library_entries = [entry for entry in plan.plan if entry.file_type == "shared_library"]
+    coordinator_nodes = sorted({entry.node for entry in plan.plan if entry.role == "cn"})
+    datanode_nodes = sorted({entry.node for entry in plan.plan if entry.role == "dn"})
+
+    print(f"Deploy plan: {plan.plugin_id}")
+    print(f"Plugin: {plan.plugin_id}")
+    print(f"Cluster: {plan.cluster}")
+    print(f"Coordinator nodes: {len(coordinator_nodes)} ({', '.join(coordinator_nodes) or 'none'})")
+    print(f"Datanode nodes: {len(datanode_nodes)} ({', '.join(datanode_nodes) or 'none'})")
+    print("Extension files -> extension_dir:")
+    _render_plan_group(extension_entries)
+    print("Library files -> lib_dir:")
+    if library_entries:
+        _render_plan_group(library_entries)
+    else:
+        print("  none (SQL-only plugin)")
+    print(
+        "Summary: "
+        f"extension_copy_items={len(extension_entries)} "
+        f"library_copy_items={len(library_entries)} "
+        f"errors={len(plan.errors)}"
+    )
+
+
+def _render_plan_group(entries) -> None:
+    if not entries:
+        print("  none")
+        return
+    rows = [
+        [
+            entry.node,
+            entry.role,
+            entry.file_type,
+            "yes" if entry.exists else "no",
+            entry.local_path,
+            entry.remote_path,
+        ]
+        for entry in entries
+    ]
+    print(render_table(["node", "role", "type", "exists", "local_path", "remote_path"], rows))
+
+
 def cmd_cluster_distribute(
     root: Path,
     cluster_file: Path,
@@ -1080,28 +1153,13 @@ def cmd_deploy_physical_distribution(
     plan = build_distribution_plan(config, manifest)
     mode = "execute" if execute else "dry-run"
 
+    _render_distribution_plan(plan)
+    print(f"Mode: {mode}")
+    print("Activate: skipped")
+    print("CREATE EXTENSION: not executed")
+
     if not execute:
-        print(f"Cluster: {plan.cluster}")
-        print(f"Plugin: {plan.plugin_id}")
-        print(f"Mode: {mode}")
         print("Physical distribution: planned")
-        print("Activate: skipped")
-        print("CREATE EXTENSION: not executed")
-        rows = [
-            [
-                entry.node,
-                entry.role,
-                entry.file_type,
-                "yes" if entry.exists else "no",
-                entry.local_path,
-                entry.remote_path,
-            ]
-            for entry in plan.plan
-        ]
-        if rows:
-            print(render_table(["node", "role", "type", "exists", "local_path", "remote_path"], rows))
-        else:
-            print("No payload files in plan.")
         if plan.errors:
             print("Errors:")
             for error in plan.errors:
@@ -1112,12 +1170,7 @@ def cmd_deploy_physical_distribution(
         return 0
 
     if plan.errors:
-        print(f"Cluster: {plan.cluster}")
-        print(f"Plugin: {plan.plugin_id}")
-        print("Mode: execute")
         print("Physical distribution: blocked")
-        print("Activate: skipped")
-        print("CREATE EXTENSION: not executed")
         print("Errors:")
         for error in plan.errors:
             print(f"- {error}")
@@ -1125,12 +1178,7 @@ def cmd_deploy_physical_distribution(
         return 1
 
     results = distribute_payload_to_nodes(config, list(physical_payload_files(manifest)), ScpSshRemoteExecutor())
-    print(f"Cluster: {config.name}")
-    print(f"Plugin: {plugin_id}")
-    print("Mode: execute")
     print("Physical distribution: executed")
-    print("Activate: skipped")
-    print("CREATE EXTENSION: not executed")
     rows = [
         [
             result.node,
@@ -1215,17 +1263,150 @@ def _render_activation_report(report) -> None:
         print("Result: OK")
 
 
+def _extension_available_sql(extension_name: str) -> str:
+    return f"SELECT name FROM pg_available_extensions WHERE name = '{extension_name}';"
+
+
+def _extension_registered_sql(extension_name: str) -> str:
+    return f"SELECT extname FROM pg_extension WHERE extname = '{extension_name}';"
+
+
+def _run_register_precheck(config: ClusterConfig, manifest, executor) -> RegisterPrecheckReport:
+    extension_name = extension_name_for(manifest)
+    create_sql = create_extension_sql(extension_name)
+    primary = config.coordinators[0] if config.coordinators else None
+    items: list[RegisterPrecheckItem] = [
+        RegisterPrecheckItem("plugin", "OK", f"{manifest.plugin_id} {manifest.version}"),
+        RegisterPrecheckItem("extension_name", "OK", extension_name),
+    ]
+    if primary is None:
+        items.append(RegisterPrecheckItem("primary_coordinator", "FAIL", "cluster.toml has no coordinator node"))
+        return RegisterPrecheckReport(manifest.plugin_id, extension_name, "", create_sql, False, tuple(items))
+
+    items.append(RegisterPrecheckItem("primary_coordinator", "OK", f"{primary.name} {primary.host}:{primary.db_port}"))
+    connect_sql = "SELECT 1;"
+    connect = executor.run_sql(primary, connect_sql)
+    items.append(
+        RegisterPrecheckItem(
+            "primary_connection",
+            "OK" if connect.returncode == 0 else "FAIL",
+            "primary coordinator reachable" if connect.returncode == 0 else (connect.stderr.strip() or connect.stdout.strip() or "connection failed"),
+            connect_sql,
+        )
+    )
+    if connect.returncode != 0:
+        return RegisterPrecheckReport(manifest.plugin_id, extension_name, primary.name, create_sql, False, tuple(items))
+
+    available_sql = _extension_available_sql(extension_name)
+    available = executor.run_sql(primary, available_sql)
+    available_names = {line.strip() for line in available.stdout.splitlines() if line.strip()}
+    available_ok = available.returncode == 0 and extension_name in available_names
+    items.append(
+        RegisterPrecheckItem(
+            "pg_available_extensions",
+            "OK" if available_ok else "FAIL",
+            f"{extension_name} is available to CREATE EXTENSION"
+            if available_ok
+            else (available.stderr.strip() or f"{extension_name} not found in pg_available_extensions"),
+            available_sql,
+        )
+    )
+    if not available_ok:
+        return RegisterPrecheckReport(manifest.plugin_id, extension_name, primary.name, create_sql, False, tuple(items))
+
+    registered_sql = _extension_registered_sql(extension_name)
+    registered = executor.run_sql(primary, registered_sql)
+    registered_names = {line.strip() for line in registered.stdout.splitlines() if line.strip()}
+    already_registered = registered.returncode == 0 and extension_name in registered_names
+    items.append(
+        RegisterPrecheckItem(
+            "pg_extension",
+            "OK" if registered.returncode == 0 else "FAIL",
+            "already registered; CREATE EXTENSION will be skipped" if already_registered else "not registered yet",
+            registered_sql,
+        )
+    )
+    return RegisterPrecheckReport(manifest.plugin_id, extension_name, primary.name, create_sql, already_registered, tuple(items))
+
+
+def _register_precheck_json(report: RegisterPrecheckReport) -> dict[str, object]:
+    return {
+        "plugin_id": report.plugin_id,
+        "extension_name": report.extension_name,
+        "primary_coordinator": report.primary_coordinator,
+        "ok": report.ok,
+        "already_registered": report.already_registered,
+        "sql": report.sql,
+        "items": [
+            {
+                "name": item.name,
+                "status": item.status,
+                "detail": item.detail,
+                "sql": item.sql,
+            }
+            for item in report.items
+        ],
+    }
+
+
+def _render_register_precheck(report: RegisterPrecheckReport) -> None:
+    print(f"Register precheck: {report.plugin_id}")
+    print(f"Extension: {report.extension_name}")
+    print(f"Primary coordinator: {report.primary_coordinator or 'none'}")
+    rows = [[item.status, item.name, item.detail, item.sql] for item in report.items]
+    print(render_table(["status", "check", "detail", "sql"], rows))
+    if report.already_registered:
+        print("CREATE EXTENSION: skipped because pg_extension already contains this extension")
+    else:
+        print("SQL to execute on primary coordinator only:")
+        print(f"  {report.sql}")
+
+
 def cmd_register(root: Path, plugin_id: str, cluster_file: Path, *, execute: bool = False, as_json: bool = False, deprecated_alias: bool = False) -> int:
     config = load_cluster_config(cluster_file)
     manifest = Catalog(root=root).load_one(plugin_id)
-    report = execute_activation(config, manifest, PsqlCoordinatorExecutor()) if execute else dry_run_activation_plan(config, manifest)
+    executor = PsqlCoordinatorExecutor()
+    precheck = _run_register_precheck(config, manifest, executor)
+    report = None
+    if precheck.ok and not precheck.already_registered:
+        report = execute_activation(config, manifest, executor) if execute else dry_run_activation_plan(config, manifest)
     if as_json:
-        print(json.dumps(activation_report_json(report), indent=2, ensure_ascii=False))
+        payload = {
+            "precheck": _register_precheck_json(precheck),
+            "activation": activation_report_json(report) if report else None,
+            "errors": [item.detail for item in precheck.items if item.status == "FAIL"],
+        }
+        if report:
+            payload = {**activation_report_json(report), **payload}
+        else:
+            payload = {
+                "cluster": config.name,
+                "plugin_id": manifest.plugin_id,
+                "extension_name": precheck.extension_name,
+                "mode": "skipped" if precheck.already_registered else ("execute" if execute else "dry-run"),
+                "physical_distribution": "not_executed",
+                "datanodes": "not_connected",
+                **payload,
+            }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         if deprecated_alias:
             print("Warning: activate is deprecated; use register.")
-        _render_activation_report(report)
-    return 1 if report.errors else 0
+        _render_register_precheck(precheck)
+        if not precheck.ok:
+            print("CREATE EXTENSION: blocked by precheck")
+            print("Result: FAILED")
+            return 1
+        if precheck.already_registered:
+            print("Result: OK")
+            return 0
+        if report:
+            _render_activation_report(report)
+    if not precheck.ok:
+        return 1
+    if precheck.already_registered:
+        return 0
+    return 1 if report and report.errors else 0
 
 
 def cmd_state(root: Path, plugin_id: str | None) -> int:
@@ -1301,10 +1482,36 @@ def cmd_report(root: Path, *, as_json: bool = False) -> int:
     return 0
 
 
+def _rollback_plan_text(manifest) -> str:
+    if not manifest.rollback_sql:
+        return ""
+    try:
+        return manifest.rollback_sql.read_text(encoding="utf-8-sig").strip()
+    except OSError as exc:
+        return f"-- cannot read rollback_sql: {exc}"
+
+
+def _render_rollback_boundary(manifest) -> None:
+    print(f"Rollback plan: {manifest.plugin_id}")
+    if manifest.rollback_sql:
+        print(f"rollback_sql: {manifest.rollback_sql}")
+        sql = _rollback_plan_text(manifest)
+        if sql:
+            print("SQL to execute:")
+            print(sql)
+    else:
+        print("Warning: manifest has no rollback_sql; rollback is not supported.")
+        print("PluginCtl will not guess a DROP EXTENSION or destructive cleanup plan.")
+    print("Boundary:")
+    print("  rollback only handles database objects declared by rollback_sql.")
+    print("  rollback does NOT delete physical files from CN/DN nodes (.control, .sql, .so).")
+
+
 def cmd_rollback(root: Path, plugin_id: str, *, execute: bool = False) -> int:
     catalog = Catalog(root=root)
     manifest = catalog.load_one(plugin_id)
     runtime = OpenTenBaseRuntime()
+    _render_rollback_boundary(manifest)
     result = rollback_plugin(runtime, manifest, execute=execute)
     result.metadata.setdefault("rollback_sql", str(manifest.rollback_sql) if manifest.rollback_sql else None)
     record_action_result(root, manifest.version, runtime, result)
