@@ -42,6 +42,7 @@ from .distribution import (
     distribution_plan_json,
     distribution_results_json,
     physical_payload_files,
+    sync_plugin_metadata_to_nodes,
 )
 from .distributed_verify import distributed_verify_report_json, run_distributed_verify
 from .doctor import run_doctor
@@ -220,6 +221,8 @@ def build_parser() -> argparse.ArgumentParser:
     new_parser.add_argument("plugin_id")
     list_parser = subparsers.add_parser("list", help="main flow: list plugins or show one plugin")
     list_parser.add_argument("plugin_id", nargs="?")
+    list_parser.add_argument("--all", action="store_true", help="include built-in reference plugins")
+    list_parser.add_argument("--builtin", action="store_true", help="show only built-in reference plugins")
 
     inspect_parser = subparsers.add_parser("inspect", help=argparse.SUPPRESS)
     inspect_parser.add_argument("plugin_id")
@@ -365,6 +368,12 @@ def _looks_like_plugin_path(value: str) -> bool:
 
 
 def ensure_plugin_registered(root: Path, plugin_id_or_path: str, *, announce: bool = True) -> tuple[str, bool, Path | None]:
+    if "/" not in plugin_id_or_path and "\\" not in plugin_id_or_path and not plugin_id_or_path.endswith((".yml", ".yaml")):
+        try:
+            Catalog(root=root).load_one(plugin_id_or_path)
+            return plugin_id_or_path, False, None
+        except ManifestError:
+            pass
     if not _looks_like_plugin_path(plugin_id_or_path):
         return plugin_id_or_path, False, None
     manifest, catalog_path = Catalog(root=root).add_user_plugin(Path(plugin_id_or_path))
@@ -376,11 +385,22 @@ def ensure_plugin_registered(root: Path, plugin_id_or_path: str, *, announce: bo
     return manifest.plugin_id, True, catalog_path
 
 
-def cmd_list(root: Path) -> int:
+def cmd_list(root: Path, *, include_builtin: bool = False, builtin_only: bool = False) -> int:
     catalog = Catalog(root=root)
-    manifests = catalog.load_all()
+    if builtin_only:
+        manifests = catalog.load_builtin()
+        scope = "built-in reference plugins"
+    elif include_builtin:
+        manifests = catalog.load_all()
+        scope = "all plugins"
+    else:
+        manifests = catalog.load_user()
+        scope = "user plugins"
     if not manifests:
-        print("No plugin manifests found.")
+        print(f"No {scope} found.")
+        if not include_builtin and not builtin_only:
+            print("Create one with: new <plugin_id>")
+            print("Show built-in examples with: list --all")
         return 0
 
     rows = [[m.plugin_id, m.name, m.version, m.payload.get("source_root", "")] for m in manifests]
@@ -415,8 +435,15 @@ def cmd_add(root: Path, plugin_path: Path) -> int:
 
 
 def cmd_remove(root: Path, plugin_id: str) -> int:
-    catalog_path = Catalog(root=root).remove_user_plugin(plugin_id)
+    catalog = Catalog(root=root)
+    entry = catalog.user_plugin_entry(plugin_id)
+    catalog_path = catalog.remove_user_plugin(plugin_id)
     print(f"Removed user plugin: {plugin_id}")
+    if entry.get("root"):
+        print(f"Plugin root: {entry['root']}")
+    if entry.get("manifest"):
+        print(f"Manifest: {entry['manifest']}")
+    print(f"Re-add: plugin_ctl add {entry.get('root') or entry.get('manifest')}")
     print(f"User catalog: {catalog_path}")
     return 0
 
@@ -1177,7 +1204,10 @@ def cmd_deploy_physical_distribution(
         print("Result: FAILED")
         return 1
 
-    results = distribute_payload_to_nodes(config, list(physical_payload_files(manifest)), ScpSshRemoteExecutor())
+    executor = ScpSshRemoteExecutor()
+    results = distribute_payload_to_nodes(config, list(physical_payload_files(manifest)), executor)
+    metadata_results = sync_plugin_metadata_to_nodes(config, manifest, executor)
+    all_results = [*results, *metadata_results]
     print("Physical distribution: executed")
     rows = [
         [
@@ -1191,17 +1221,17 @@ def cmd_deploy_physical_distribution(
             result.local_path,
             result.remote_path,
         ]
-        for result in sorted(results, key=lambda item: (item.node, item.local_path, item.remote_path))
+        for result in sorted(all_results, key=lambda item: (item.node, item.stage, item.local_path, item.remote_path))
     ]
     if rows:
         print(render_table(["node", "role", "status", "stage", "returncode", "local_sha256", "remote_sha256", "local_path", "remote_path"], rows))
-    summary = _distribution_summary(results)
+    summary = _distribution_summary(all_results)
     print(
         "Summary: "
         f"total={summary['total']} succeeded={summary['succeeded']} "
         f"failed={summary['failed']} checksum_failed={summary['checksum_failed']}"
     )
-    errors = _distribution_errors(results)
+    errors = _distribution_errors(all_results)
     if errors:
         print("Errors:")
         for error in errors:
@@ -1561,7 +1591,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "list":
             if args.plugin_id:
                 return cmd_list_one(args.root, args.plugin_id)
-            return cmd_list(args.root)
+            return cmd_list(args.root, include_builtin=args.all, builtin_only=args.builtin)
         if args.command == "inspect":
             return cmd_inspect(args.root, args.plugin_id)
         if args.command == "check":

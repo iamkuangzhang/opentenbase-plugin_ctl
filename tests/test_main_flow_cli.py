@@ -247,6 +247,31 @@ payload:
             self.assertIn("Plugin: path_deploy_plugin", output)
             self.assertIn("Result: OK", output)
 
+    def test_deploy_prefers_registered_plugin_id_over_same_named_directory(self) -> None:
+        catalog_file = Path(self.tempdir.name) / "catalog.json"
+        plugin_parent = Path(self.tempdir.name) / "plugins"
+        plugin_dir = plugin_parent / "path_deploy_plugin"
+        fake = FakeRemoteExecutor()
+
+        with patch.dict(os.environ, {"PLUGIN_CTL_CATALOG_FILE": str(catalog_file)}):
+            self.assertEqual(
+                self._run(["--root", str(self.root), "dev", "init", "path_deploy_plugin", "--dir", str(plugin_parent)])[0],
+                0,
+            )
+            self.assertEqual(self._run(["--root", str(self.root), "add", str(plugin_dir)])[0], 0)
+            with patch("plugin_ctl.cli.ScpSshRemoteExecutor", return_value=fake):
+                cwd = Path.cwd()
+                try:
+                    os.chdir(plugin_parent)
+                    code, output = self._run(["--root", str(self.root), "deploy", "path_deploy_plugin", "-f", str(self.cluster_file)])
+                finally:
+                    os.chdir(cwd)
+
+        self.assertEqual(code, 0)
+        self.assertTrue(fake.copies)
+        self.assertNotIn("Registered plugin: path_deploy_plugin", output)
+        self.assertIn("Plugin: path_deploy_plugin", output)
+
     def test_deploy_uses_default_cluster_config_when_file_is_omitted(self) -> None:
         fake = FakeRemoteExecutor()
         with patch.dict(os.environ, {"OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(self.cluster_file)}):

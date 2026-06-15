@@ -4,7 +4,8 @@ from hashlib import sha256
 from pathlib import Path
 
 from plugin_ctl.cluster import ClusterConfig, ClusterNode
-from plugin_ctl.distribution import distribute_payload_to_nodes
+from plugin_ctl.distribution import distribute_payload_to_nodes, sync_plugin_metadata_to_nodes
+from plugin_ctl.manifest import load_manifest
 from plugin_ctl.runtime.opentenbase import RemoteCommandResult
 
 
@@ -149,6 +150,46 @@ class DistributionTest(unittest.TestCase):
         self.assertEqual(failed.stage, "precheck")
         self.assertEqual(failed.detail, "not writable")
         self.assertTrue(passed.ok)
+
+    def test_sync_plugin_metadata_copies_manifest_and_payload_to_hidden_package_dir(self) -> None:
+        plugin_dir = self.root / "demo_plugin"
+        payload_dir = plugin_dir / "payload"
+        payload_dir.mkdir(parents=True)
+        manifest_path = plugin_dir / "manifest.yml"
+        manifest_path.write_text(
+            "\n".join(
+                [
+                    "plugin_id: demo_plugin",
+                    "name: Demo Plugin",
+                    "version: 0.1.0",
+                    "description: Demo plugin.",
+                    "database: opentenbase",
+                    "targets:",
+                    "  cn: true",
+                    "  dn: true",
+                    "payload:",
+                    "  source_root: payload",
+                    "install_sql: payload/demo_plugin--0.1.0.sql",
+                    "verify_sql: SELECT 1;",
+                    "rollback_sql: payload/rollback.sql",
+                    "installed_probe: SELECT 1;",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (payload_dir / "demo_plugin.control").write_text("default_version = '0.1.0'\n", encoding="utf-8")
+        (payload_dir / "demo_plugin--0.1.0.sql").write_text("SELECT 1;\n", encoding="utf-8")
+        manifest = load_manifest(manifest_path)
+        executor = MockRemoteExecutor()
+
+        results = sync_plugin_metadata_to_nodes(self.cluster, manifest, executor, max_workers=2)
+
+        self.assertTrue(all(result.ok for result in results))
+        remote_paths = {copy[2] for copy in executor.copies}
+        self.assertIn(".plugin_ctl/packages/demo_plugin/manifest.yml", remote_paths)
+        self.assertIn(".plugin_ctl/packages/demo_plugin/payload/demo_plugin.control", remote_paths)
+        self.assertIn(".plugin_ctl/packages/demo_plugin/payload/demo_plugin--0.1.0.sql", remote_paths)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ Then use the short commands:
 pluginctl> init
 pluginctl> new my_plugin
 pluginctl> list
+pluginctl> list --all
 pluginctl> deploy my_plugin
 pluginctl> register my_plugin
 pluginctl> check my_plugin
@@ -71,6 +72,7 @@ help
 init
 new <plugin_id>
 list [plugin_id]
+list --all
 deploy <plugin_id_or_path>
 register <plugin_id>
 check <plugin_id_or_path>
@@ -85,9 +87,9 @@ Use `help advanced` for compatibility and debugging commands.
 
 `new <plugin_id>` creates a beginner plugin template and automatically adds it to PluginCtl.
 
-`list` shows known plugins. `list <plugin_id>` shows one plugin manifest and recent action records.
+`list` shows user-created or user-added plugins. `list --all` also shows built-in reference plugins. `list <plugin_id>` shows one plugin manifest and recent action records.
 
-`deploy <plugin_id_or_path>` copies plugin package files to the OpenTenBase CN/DN extension directories. Before copying, PluginCtl prints a physical distribution plan: extension files (`.control` and `.sql`) go to `extension_dir`, library files (`.so`) go to `lib_dir`, and SQL-only plugins show `library none`.
+`deploy <plugin_id_or_path>` copies plugin package files to the OpenTenBase CN/DN extension directories. Before copying, PluginCtl prints a physical distribution plan: extension files (`.control` and `.sql`) go to `extension_dir`, library files (`.so`) go to `lib_dir`, and SQL-only plugins show `library none`. It also syncs a hidden PluginCtl package manifest under `~/.plugin_ctl/packages/<plugin_id>/`, so `plugin_ctl list` can see the deployed plugin on other nodes without copying the source directory into the user's workspace.
 
 `register <plugin_id>` first runs read-only prechecks on the primary coordinator. It blocks if the extension is missing from `pg_available_extensions`, skips if it is already in `pg_extension`, otherwise runs `CREATE EXTENSION` once on the primary coordinator and checks other coordinators through read-only `pg_extension` queries.
 

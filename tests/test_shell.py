@@ -292,7 +292,9 @@ class PluginCtlShellTest(unittest.TestCase):
             code = run_shell(self.root, dispatcher=main, input_func=self._input(["list", "quit"]), output=output)
 
         self.assertEqual(code, 0)
-        self.assertIn("pluginctl_smoke_plugin", output.getvalue())
+        text = output.getvalue()
+        self.assertIn("No user plugins found.", text)
+        self.assertIn("Show built-in examples with: list --all", text)
 
     def test_diagnose_maps_to_plugin_diagnose(self) -> None:
         calls: list[list[str]] = []
@@ -324,7 +326,14 @@ class PluginCtlShellTest(unittest.TestCase):
             list_code = main(["--root", str(self.root), "list"])
 
         self.assertEqual(list_code, 0)
-        self.assertIn("pluginctl_smoke_plugin", list_output.getvalue())
+        self.assertIn("No user plugins found.", list_output.getvalue())
+
+        list_all_output = io.StringIO()
+        with redirect_stdout(list_all_output):
+            list_all_code = main(["--root", str(self.root), "list", "--all"])
+
+        self.assertEqual(list_all_code, 0)
+        self.assertIn("pluginctl_smoke_plugin", list_all_output.getvalue())
 
         check_output = io.StringIO()
         with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeLocalRuntime()):

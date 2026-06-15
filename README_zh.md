@@ -41,6 +41,7 @@ plugin_ctl
 pluginctl> init
 pluginctl> new my_plugin
 pluginctl> list
+pluginctl> list --all
 pluginctl> deploy my_plugin
 pluginctl> register my_plugin
 pluginctl> check my_plugin
@@ -71,6 +72,7 @@ help
 init
 new <plugin_id>
 list [plugin_id]
+list --all
 deploy <plugin_id_or_path>
 register <plugin_id>
 check <plugin_id_or_path>
@@ -89,9 +91,9 @@ help advanced
 
 `new <plugin_id>`：创建一个适合新手学习的插件模板，并自动加入 PluginCtl 管理。
 
-`list`：列出已识别的插件。`list <plugin_id>`：查看某个插件的 manifest 和最近操作记录。
+`list`：列出用户自己创建或接入的插件。`list --all`：同时显示内置参考插件。`list <plugin_id>`：查看某个插件的 manifest 和最近操作记录。
 
-`deploy <plugin_id_or_path>`：把插件包文件复制到 OpenTenBase 的 CN/DN 扩展目录。复制前会先显示物理分发计划：`.control` / `.sql` 会进入 `extension_dir`，`.so` 会进入 `lib_dir`，纯 SQL 插件会明确显示没有 library 文件。
+`deploy <plugin_id_or_path>`：把插件包文件复制到 OpenTenBase 的 CN/DN 扩展目录。复制前会先显示物理分发计划：`.control` / `.sql` 会进入 `extension_dir`，`.so` 会进入 `lib_dir`，纯 SQL 插件会明确显示没有 library 文件。它还会把隐藏的 PluginCtl 管理 manifest 同步到 `~/.plugin_ctl/packages/<plugin_id>/`，所以其他节点上的 `plugin_ctl list` 也能看到已分发插件，但不会把源码目录复制到用户工作目录。
 
 `register <plugin_id>`：先在 primary coordinator 上做只读预检。如果 `pg_available_extensions` 里没有该扩展，会阻断注册；如果 `pg_extension` 里已经存在，会跳过；否则只执行一次 `CREATE EXTENSION`，再只读检查其他 coordinator 的 `pg_extension` 视图是否一致。
 

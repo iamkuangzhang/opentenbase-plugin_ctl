@@ -17,6 +17,10 @@ def user_catalog_path() -> Path:
     return Path.home() / ".plugin_ctl" / "catalog.json"
 
 
+def user_package_root() -> Path:
+    return user_catalog_path().parent / "packages"
+
+
 def _read_user_catalog(path: Path | None = None) -> dict[str, Any]:
     catalog_path = path or user_catalog_path()
     if not catalog_path.exists():
@@ -51,7 +55,23 @@ def user_manifest_paths(path: Path | None = None) -> list[Path]:
         manifest_path = Path(str(manifest)).expanduser()
         if manifest_path.exists():
             paths.append(manifest_path.resolve())
-    return sorted(dict.fromkeys(paths))
+    package_root = (path.parent / "packages") if path else user_package_root()
+    if package_root.exists():
+        paths.extend(sorted(package_root.glob("*/manifest.yml")))
+        paths.extend(sorted(package_root.glob("*/plugin.yml")))
+    return list(dict.fromkeys(paths))
+
+
+def _load_unique_manifests(paths: list[Path]) -> list[PluginManifest]:
+    manifests: list[PluginManifest] = []
+    seen_plugin_ids: set[str] = set()
+    for path in paths:
+        manifest = load_manifest(path)
+        if manifest.plugin_id in seen_plugin_ids:
+            continue
+        seen_plugin_ids.add(manifest.plugin_id)
+        manifests.append(manifest)
+    return manifests
 
 
 def find_manifest_in_plugin_dir(plugin_path: Path) -> Path:
@@ -92,13 +112,16 @@ class Catalog:
         return sorted(dict.fromkeys(paths))
 
     def manifest_paths(self) -> list[Path]:
-        return sorted(dict.fromkeys([*self.builtin_manifest_paths(), *user_manifest_paths()]))
+        return list(dict.fromkeys([*self.builtin_manifest_paths(), *user_manifest_paths()]))
 
     def load_all(self) -> list[PluginManifest]:
-        manifests: list[PluginManifest] = []
-        for path in self.manifest_paths():
-            manifests.append(load_manifest(path))
-        return manifests
+        return _load_unique_manifests(self.manifest_paths())
+
+    def load_builtin(self) -> list[PluginManifest]:
+        return _load_unique_manifests(self.builtin_manifest_paths())
+
+    def load_user(self) -> list[PluginManifest]:
+        return _load_unique_manifests(user_manifest_paths())
 
     def load_one(self, plugin_id: str) -> PluginManifest:
         for manifest in self.load_all():
@@ -119,12 +142,19 @@ class Catalog:
             {
                 "plugin_id": manifest.plugin_id,
                 "manifest": str(manifest_path.resolve()),
-                "root": str(manifest.project_root.resolve()),
+                "root": str(manifest_path.parent.resolve()),
                 "added_at": datetime.now(timezone.utc).isoformat(),
             }
         )
         data["plugins"] = sorted(plugins, key=lambda entry: str(entry.get("plugin_id", "")))
         return manifest, _write_user_catalog(data)
+
+    def user_plugin_entry(self, plugin_id: str) -> dict[str, Any]:
+        data = _read_user_catalog()
+        for entry in data["plugins"]:
+            if isinstance(entry, dict) and entry.get("plugin_id") == plugin_id:
+                return dict(entry)
+        raise ManifestError(f"user plugin not registered: {plugin_id}")
 
     def remove_user_plugin(self, plugin_id: str) -> Path:
         data = _read_user_catalog()

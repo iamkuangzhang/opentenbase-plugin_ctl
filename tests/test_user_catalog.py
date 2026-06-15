@@ -74,6 +74,8 @@ class UserCatalogTest(unittest.TestCase):
                 manifest = Catalog(root=self.root).load_one("external_demo_plugin")
                 self.assertEqual(manifest.project_root, plugin_dir)
                 self.assertEqual(manifest.source_root, plugin_dir / "payload")
+                entry = Catalog(root=self.root).user_plugin_entry("external_demo_plugin")
+                self.assertEqual(entry["root"], str(plugin_dir.resolve()))
 
     def test_added_plugin_is_visible_to_list_inspect_and_lint(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -112,9 +114,71 @@ class UserCatalogTest(unittest.TestCase):
 
             with patch.dict(os.environ, env):
                 self.assertEqual(self.run_silent(["--root", str(self.root), "add", str(plugin_dir)]), 0)
-                self.assertEqual(self.run_silent(["--root", str(self.root), "remove", "external_demo_plugin"]), 0)
+                remove_output = io.StringIO()
+                with redirect_stdout(remove_output):
+                    remove_code = main(["--root", str(self.root), "remove", "external_demo_plugin"])
+                self.assertEqual(remove_code, 0)
+                self.assertIn(f"Plugin root: {plugin_dir.resolve()}", remove_output.getvalue())
+                self.assertIn(f"Manifest: {(plugin_dir / 'manifest.yml').resolve()}", remove_output.getvalue())
+                self.assertIn(f"Re-add: plugin_ctl add {plugin_dir.resolve()}", remove_output.getvalue())
                 with self.assertRaises(Exception):
                     Catalog(root=self.root).load_one("external_demo_plugin")
+
+    def test_list_reads_deployed_package_manifests_without_catalog_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            package_dir = tmp / "home" / "packages" / "deployed_demo"
+            package_dir.mkdir(parents=True)
+            (package_dir / "manifest.yml").write_text(
+                "\n".join(
+                    [
+                        "plugin_id: deployed_demo",
+                        "name: Deployed Demo Plugin",
+                        "version: 0.1.0",
+                        "description: Deployed demo plugin.",
+                        "database: OpenTenBase",
+                        "targets:",
+                        "  cn: true",
+                        "payload:",
+                        "  source_root: .",
+                        "install_sql: SELECT 1;",
+                        "verify_sql: SELECT 1;",
+                        "rollback_sql: SELECT 1;",
+                        "installed_probe: SELECT 1;",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            catalog_file = tmp / "home" / "catalog.json"
+            env = {"PLUGIN_CTL_CATALOG_FILE": str(catalog_file)}
+
+            with patch.dict(os.environ, env):
+                list_output = io.StringIO()
+                with redirect_stdout(list_output):
+                    list_code = main(["--root", str(self.root), "list"])
+
+                self.assertEqual(list_code, 0)
+                self.assertIn("deployed_demo", list_output.getvalue())
+
+    def test_list_deduplicates_catalog_and_deployed_package_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            plugin_dir = write_external_plugin(tmp, plugin_id="duplicate_demo")
+            package_dir = tmp / "home" / "packages" / "duplicate_demo"
+            package_dir.mkdir(parents=True)
+            (package_dir / "manifest.yml").write_text((plugin_dir / "manifest.yml").read_text(encoding="utf-8"), encoding="utf-8")
+            catalog_file = tmp / "home" / "catalog.json"
+            env = {"PLUGIN_CTL_CATALOG_FILE": str(catalog_file)}
+
+            with patch.dict(os.environ, env):
+                self.assertEqual(self.run_silent(["--root", str(self.root), "add", str(plugin_dir)]), 0)
+                list_output = io.StringIO()
+                with redirect_stdout(list_output):
+                    list_code = main(["--root", str(self.root), "list"])
+
+                self.assertEqual(list_code, 0)
+                self.assertEqual(list_output.getvalue().count("duplicate_demo"), 1)
 
 
 if __name__ == "__main__":

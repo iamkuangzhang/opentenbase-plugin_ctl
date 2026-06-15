@@ -73,6 +73,18 @@ def _remote_target_dir(node: ClusterNode, local_path: Path) -> str:
     raise ValueError(f"unsupported payload file type: {local_path}")
 
 
+def _remote_package_root(plugin_id: str) -> str:
+    return f".plugin_ctl/packages/{plugin_id}"
+
+
+def _remote_package_path(manifest: PluginManifest, local_path: Path) -> str:
+    try:
+        relative = local_path.resolve().relative_to(manifest.project_root.resolve())
+    except ValueError:
+        relative = Path(local_path.name)
+    return str(PurePosixPath(_remote_package_root(manifest.plugin_id)) / PurePosixPath(relative.as_posix()))
+
+
 def _payload_file_type(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix == ".so":
@@ -218,6 +230,96 @@ def _directory_check(node: ClusterNode, remote_dir: str, executor: RemoteNodeExe
     return True, "remote target directory writable", 0
 
 
+def _copy_with_checksum(
+    node: ClusterNode,
+    local_path: Path,
+    remote_path: str,
+    executor: RemoteNodeExecutor,
+    *,
+    status: str,
+    stage: str,
+    detail: str,
+) -> PayloadDistributionResult:
+    if not local_path.exists() or not local_path.is_file():
+        return PayloadDistributionResult(
+            node=node.name,
+            role=node.role,
+            local_path=str(local_path),
+            remote_path=remote_path,
+            ok=False,
+            status="missing_local_file",
+            stage=stage,
+            detail=f"local file not found: {local_path}",
+            returncode=1,
+        )
+
+    local_digest = _local_sha256(local_path)
+    remote_dir = str(PurePosixPath(remote_path).parent)
+    mkdir = executor.run(node, ["mkdir", "-p", remote_dir])
+    if mkdir.returncode != 0:
+        return PayloadDistributionResult(
+            node=node.name,
+            role=node.role,
+            local_path=str(local_path),
+            remote_path=remote_path,
+            ok=False,
+            status="directory_failed",
+            stage=stage,
+            detail=mkdir.stderr.strip() or mkdir.stdout.strip() or f"failed to create remote directory: {remote_dir}",
+            returncode=mkdir.returncode,
+            local_sha256=local_digest,
+        )
+
+    copy = executor.copy_file(node, local_path, remote_path)
+    if copy.returncode != 0:
+        return PayloadDistributionResult(
+            node=node.name,
+            role=node.role,
+            local_path=str(local_path),
+            remote_path=remote_path,
+            ok=False,
+            status="copy_failed",
+            stage=stage,
+            detail=copy.stderr.strip() or copy.stdout.strip() or "copy failed",
+            returncode=copy.returncode,
+            local_sha256=local_digest,
+        )
+
+    remote_hash_result = executor.sha256_file(node, remote_path)
+    remote_digest = _remote_sha256_value(remote_hash_result)
+    if remote_hash_result.returncode != 0:
+        return PayloadDistributionResult(
+            node=node.name,
+            role=node.role,
+            local_path=str(local_path),
+            remote_path=remote_path,
+            ok=False,
+            status="checksum_failed",
+            stage=stage,
+            detail=remote_hash_result.stderr.strip() or remote_hash_result.stdout.strip() or "remote checksum failed",
+            returncode=remote_hash_result.returncode,
+            local_sha256=local_digest,
+            remote_sha256=remote_digest,
+            checksum_ok=False,
+        )
+
+    checksum_ok = local_digest == remote_digest
+    return PayloadDistributionResult(
+        node=node.name,
+        role=node.role,
+        local_path=str(local_path),
+        remote_path=remote_path,
+        ok=checksum_ok,
+        status=status if checksum_ok else "checksum_failed",
+        stage=stage,
+        detail=detail if checksum_ok else "checksum mismatch",
+        returncode=0 if checksum_ok else 1,
+        local_sha256=local_digest,
+        remote_sha256=remote_digest,
+        checksum_ok=checksum_ok,
+    )
+
+
 def _distribute_one(node: ClusterNode, local_path: Path, executor: RemoteNodeExecutor) -> PayloadDistributionResult:
     try:
         remote_path = _remote_target_path(node, local_path)
@@ -344,6 +446,29 @@ def _distribute_one(node: ClusterNode, local_path: Path, executor: RemoteNodeExe
     )
 
 
+def _metadata_files(manifest: PluginManifest) -> tuple[Path, ...]:
+    if manifest.path is None:
+        return tuple(physical_payload_files(manifest))
+    files = [manifest.path, *physical_payload_files(manifest)]
+    return tuple(sorted(dict.fromkeys(files)))
+
+
+def _sync_metadata_one(node: ClusterNode, manifest: PluginManifest, local_path: Path, executor: RemoteNodeExecutor) -> PayloadDistributionResult:
+    if manifest.path is not None and local_path == manifest.path:
+        remote_path = str(PurePosixPath(_remote_package_root(manifest.plugin_id)) / "manifest.yml")
+    else:
+        remote_path = _remote_package_path(manifest, local_path)
+    return _copy_with_checksum(
+        node,
+        local_path,
+        remote_path,
+        executor,
+        status="metadata_synced",
+        stage="metadata",
+        detail="plugin metadata synced",
+    )
+
+
 def distribute_payload_to_nodes(
     cluster: ClusterConfig,
     payload_files: list[Path],
@@ -373,6 +498,43 @@ def distribute_payload_to_nodes(
                         ok=False,
                         status="executor_failed",
                         stage="execute",
+                        detail=str(exc),
+                        returncode=1,
+                    )
+                )
+    return results
+
+
+def sync_plugin_metadata_to_nodes(
+    cluster: ClusterConfig,
+    manifest: PluginManifest,
+    executor: RemoteNodeExecutor,
+    max_workers: int = 8,
+) -> list[PayloadDistributionResult]:
+    nodes = [*cluster.coordinators, *cluster.datanodes]
+    files = list(_metadata_files(manifest))
+    jobs: list[tuple[ClusterNode, Path]] = [(node, path) for node in nodes for path in files]
+    if not jobs:
+        return []
+
+    workers = max(1, min(max_workers, len(jobs)))
+    results: list[PayloadDistributionResult] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_sync_metadata_one, node, manifest, path, executor): (node, path) for node, path in jobs}
+        for future in as_completed(futures):
+            node, path = futures[future]
+            try:
+                results.append(future.result())
+            except Exception as exc:
+                results.append(
+                    PayloadDistributionResult(
+                        node=node.name,
+                        role=node.role,
+                        local_path=str(path),
+                        remote_path="",
+                        ok=False,
+                        status="executor_failed",
+                        stage="metadata",
                         detail=str(exc),
                         returncode=1,
                     )

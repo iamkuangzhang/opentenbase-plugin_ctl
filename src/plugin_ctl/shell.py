@@ -19,6 +19,7 @@ HELP_TEXT = """Available commands:
   init
   new <plugin_id>
   list [plugin_id]
+  list --all
   deploy <plugin_id_or_path>
   register <plugin_id>
   check <plugin_id_or_path>
