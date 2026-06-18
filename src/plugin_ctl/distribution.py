@@ -100,19 +100,29 @@ def physical_payload_files(manifest: PluginManifest) -> tuple[Path, ...]:
     candidate_paths: list[Path] = []
     source_root = manifest.source_root
     if source_root.exists() and source_root.is_dir():
-        # 物理载荷扫描卡点：source_root 下的 .so/.control/.sql 都进入计划。
+        # OpenTenBase extension 目录只需要数据库可直接加载的物理载荷：
+        # control 文件、共享库，以及 CREATE EXTENSION 使用的安装 SQL。
+        # verify/rollback 等治理脚本会进入 PluginCtl 元数据缓存，不直接投放到 extension 目录。
         candidate_paths.extend(
             path
             for path in sorted(source_root.rglob("*"))
-            if path.is_file() and path.suffix.lower() in {".so", ".control", ".sql"}
+            if path.is_file() and path.suffix.lower() in {".so", ".control"}
         )
 
-    for value in manifest.payload.values():
-        if not isinstance(value, str):
+    candidate_paths.append(manifest.install_sql)
+
+    for key in ("extension_files", "library_files"):
+        values = manifest.payload.get(key, [])
+        if isinstance(values, str):
+            values = [values]
+        if not isinstance(values, list):
             continue
-        if Path(value).suffix.lower() not in {".so", ".control", ".sql"}:
-            continue
-        candidate_paths.append(manifest.project_root / value)
+        for value in values:
+            if not isinstance(value, str):
+                continue
+            if Path(value).suffix.lower() not in {".so", ".control", ".sql"}:
+                continue
+            candidate_paths.append(manifest.project_root / value)
 
     # 保持稳定顺序，同时去重。
     return tuple(sorted(dict.fromkeys(candidate_paths)))

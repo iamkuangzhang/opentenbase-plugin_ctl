@@ -438,6 +438,7 @@ def cmd_remove(root: Path, plugin_id: str) -> int:
     catalog = Catalog(root=root)
     entry = catalog.user_plugin_entry(plugin_id)
     catalog_path = catalog.remove_user_plugin(plugin_id)
+    removed_package_cache = catalog.remove_local_package_cache(plugin_id)
     print(f"Removed user plugin: {plugin_id}")
     if entry.get("root"):
         print(f"Plugin root: {entry['root']}")
@@ -445,6 +446,11 @@ def cmd_remove(root: Path, plugin_id: str) -> int:
         print(f"Manifest: {entry['manifest']}")
     print(f"Re-add: plugin_ctl add {entry.get('root') or entry.get('manifest')}")
     print(f"User catalog: {catalog_path}")
+    if removed_package_cache:
+        print("Local package metadata cache: removed")
+    else:
+        print("Local package metadata cache: not found")
+    print("Database objects and distributed extension files were not removed.")
     return 0
 
 

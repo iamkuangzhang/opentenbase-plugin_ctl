@@ -89,7 +89,7 @@ Use `help advanced` for compatibility and debugging commands.
 
 `list` shows user-created or user-added plugins. `list --all` also shows built-in reference plugins. `list <plugin_id>` shows one plugin manifest and recent action records.
 
-`deploy <plugin_id_or_path>` copies plugin package files to the OpenTenBase CN/DN extension directories. Before copying, PluginCtl prints a physical distribution plan: extension files (`.control` and `.sql`) go to `extension_dir`, library files (`.so`) go to `lib_dir`, and SQL-only plugins show `library none`. It also syncs a hidden PluginCtl package manifest under `~/.plugin_ctl/packages/<plugin_id>/`, so `plugin_ctl list` can see the deployed plugin on other nodes without copying the source directory into the user's workspace.
+`deploy <plugin_id_or_path>` copies the database-loadable plugin files to OpenTenBase CN/DN nodes. Before copying, PluginCtl prints a physical distribution plan: `.control` files and the extension install SQL go to `extension_dir`, `.so` files go to `lib_dir`, and SQL-only plugins show `library none`. Governance scripts such as `verify.sql` and `rollback.sql` are not copied into the OpenTenBase extension directory; they are synced only as PluginCtl metadata under `~/.plugin_ctl/packages/<plugin_id>/`. This lets `plugin_ctl list` see the deployed plugin on other nodes without copying the source directory into the user's workspace.
 
 `register <plugin_id>` first runs read-only prechecks on the primary coordinator. It blocks if the extension is missing from `pg_available_extensions`, skips if it is already in `pg_extension`, otherwise runs `CREATE EXTENSION` once on the primary coordinator and checks other coordinators through read-only `pg_extension` queries.
 
@@ -120,6 +120,8 @@ Modifying commands include:
 - `deploy`: copies files to CN/DN nodes after showing the physical distribution plan.
 - `register`: runs prechecks, then may run `CREATE EXTENSION` on the primary coordinator.
 - `rollback`: runs rollback SQL for database objects only; it does not delete CN/DN physical files.
+
+`remove <plugin_id>` is a management cleanup command. It removes the user catalog entry and the local PluginCtl package metadata cache, but it does not drop database objects or delete distributed extension files.
 
 `activate` is kept only as a deprecated compatibility alias for `register`. New documents and scripts should use `register`.
 

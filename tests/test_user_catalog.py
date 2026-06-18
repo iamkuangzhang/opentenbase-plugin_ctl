@@ -121,8 +121,36 @@ class UserCatalogTest(unittest.TestCase):
                 self.assertIn(f"Plugin root: {plugin_dir.resolve()}", remove_output.getvalue())
                 self.assertIn(f"Manifest: {(plugin_dir / 'manifest.yml').resolve()}", remove_output.getvalue())
                 self.assertIn(f"Re-add: plugin_ctl add {plugin_dir.resolve()}", remove_output.getvalue())
+                self.assertIn("Database objects and distributed extension files were not removed.", remove_output.getvalue())
                 with self.assertRaises(Exception):
                     Catalog(root=self.root).load_one("external_demo_plugin")
+
+    def test_remove_clears_local_package_metadata_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            plugin_dir = write_external_plugin(tmp, plugin_id="cached_demo")
+            catalog_file = tmp / "home" / "catalog.json"
+            package_dir = tmp / "home" / "packages" / "cached_demo"
+            package_dir.mkdir(parents=True)
+            (package_dir / "manifest.yml").write_text((plugin_dir / "manifest.yml").read_text(encoding="utf-8"), encoding="utf-8")
+            env = {"PLUGIN_CTL_CATALOG_FILE": str(catalog_file)}
+
+            with patch.dict(os.environ, env):
+                self.assertEqual(self.run_silent(["--root", str(self.root), "add", str(plugin_dir)]), 0)
+                self.assertTrue(package_dir.exists())
+
+                remove_output = io.StringIO()
+                with redirect_stdout(remove_output):
+                    remove_code = main(["--root", str(self.root), "remove", "cached_demo"])
+
+                self.assertEqual(remove_code, 0)
+                self.assertIn("Local package metadata cache: removed", remove_output.getvalue())
+                self.assertFalse(package_dir.exists())
+                list_output = io.StringIO()
+                with redirect_stdout(list_output):
+                    list_code = main(["--root", str(self.root), "list"])
+                self.assertEqual(list_code, 0)
+                self.assertNotIn("cached_demo", list_output.getvalue())
 
     def test_list_reads_deployed_package_manifests_without_catalog_entry(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -93,7 +93,7 @@ help advanced
 
 `list`：列出用户自己创建或接入的插件。`list --all`：同时显示内置参考插件。`list <plugin_id>`：查看某个插件的 manifest 和最近操作记录。
 
-`deploy <plugin_id_or_path>`：把插件包文件复制到 OpenTenBase 的 CN/DN 扩展目录。复制前会先显示物理分发计划：`.control` / `.sql` 会进入 `extension_dir`，`.so` 会进入 `lib_dir`，纯 SQL 插件会明确显示没有 library 文件。它还会把隐藏的 PluginCtl 管理 manifest 同步到 `~/.plugin_ctl/packages/<plugin_id>/`，所以其他节点上的 `plugin_ctl list` 也能看到已分发插件，但不会把源码目录复制到用户工作目录。
+`deploy <plugin_id_or_path>`：把数据库可直接加载的插件文件复制到 OpenTenBase 的 CN/DN 节点。复制前会先显示物理分发计划：`.control` 文件和 extension 安装 SQL 会进入 `extension_dir`，`.so` 会进入 `lib_dir`，纯 SQL 插件会明确显示没有 library 文件。`verify.sql`、`rollback.sql` 这类治理脚本不会复制到 OpenTenBase 的 extension 目录，只会作为 PluginCtl 元数据同步到 `~/.plugin_ctl/packages/<plugin_id>/`。这样其他节点上的 `plugin_ctl list` 也能看到已分发插件，但不会把源码目录复制到用户工作目录。
 
 `register <plugin_id>`：先在 primary coordinator 上做只读预检。如果 `pg_available_extensions` 里没有该扩展，会阻断注册；如果 `pg_extension` 里已经存在，会跳过；否则只执行一次 `CREATE EXTENSION`，再只读检查其他 coordinator 的 `pg_extension` 视图是否一致。
 
@@ -124,6 +124,8 @@ pluginctl> check ./my_plugin/manifest.yml
 - `deploy`：显示物理分发计划后，向 CN/DN 节点复制插件文件。
 - `register`：先做预检，然后可能在 primary coordinator 上执行 `CREATE EXTENSION`。
 - `rollback`：只执行数据库对象回滚 SQL，不删除 CN/DN 上的插件物理文件。
+
+`remove <plugin_id>` 是管理关系清理命令。它会删除用户 catalog 记录和本机 PluginCtl 包元数据缓存，但不会删除数据库对象，也不会删除已经分发到 CN/DN 节点上的 extension 物理文件。
 
 `activate` 仅作为 `register` 的旧兼容别名保留。新的文档和脚本应统一使用 `register`。
 

@@ -4,7 +4,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from plugin_ctl.cluster import ClusterConfig, ClusterNode
-from plugin_ctl.distribution import distribute_payload_to_nodes, sync_plugin_metadata_to_nodes
+from plugin_ctl.distribution import distribute_payload_to_nodes, physical_payload_files, sync_plugin_metadata_to_nodes
 from plugin_ctl.manifest import load_manifest
 from plugin_ctl.runtime.opentenbase import RemoteCommandResult
 
@@ -151,6 +151,40 @@ class DistributionTest(unittest.TestCase):
         self.assertEqual(failed.detail, "not writable")
         self.assertTrue(passed.ok)
 
+    def test_physical_payload_files_excludes_verify_and_rollback_sql(self) -> None:
+        plugin_dir = self.root / "demo_plugin"
+        plugin_dir.mkdir()
+        manifest_path = plugin_dir / "manifest.yml"
+        manifest_path.write_text(
+            "\n".join(
+                [
+                    "plugin_id: demo_plugin",
+                    "name: Demo Plugin",
+                    "version: 0.1.0",
+                    "description: Demo plugin.",
+                    "database: OpenTenBase",
+                    "targets:",
+                    "  cn: true",
+                    "payload:",
+                    "  source_root: .",
+                    "  extension_name: demo_plugin",
+                    "  install_sql: demo_plugin--0.1.0.sql",
+                    "  verify_sql: verify.sql",
+                    "  rollback_sql: rollback.sql",
+                    "  installed_probe: SELECT 1;",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        for name in ["demo_plugin.control", "demo_plugin--0.1.0.sql", "verify.sql", "rollback.sql"]:
+            (plugin_dir / name).write_text("SELECT 1;\n", encoding="utf-8")
+        manifest = load_manifest(manifest_path)
+
+        payload_names = {path.name for path in physical_payload_files(manifest)}
+
+        self.assertEqual(payload_names, {"demo_plugin.control", "demo_plugin--0.1.0.sql"})
+
     def test_sync_plugin_metadata_copies_manifest_and_payload_to_hidden_package_dir(self) -> None:
         plugin_dir = self.root / "demo_plugin"
         payload_dir = plugin_dir / "payload"
@@ -169,10 +203,10 @@ class DistributionTest(unittest.TestCase):
                     "  dn: true",
                     "payload:",
                     "  source_root: payload",
-                    "install_sql: payload/demo_plugin--0.1.0.sql",
-                    "verify_sql: SELECT 1;",
-                    "rollback_sql: payload/rollback.sql",
-                    "installed_probe: SELECT 1;",
+                    "  install_sql: payload/demo_plugin--0.1.0.sql",
+                    "  verify_sql: SELECT 1;",
+                    "  rollback_sql: payload/rollback.sql",
+                    "  installed_probe: SELECT 1;",
                 ]
             )
             + "\n",

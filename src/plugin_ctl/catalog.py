@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import shutil
 from typing import Any
 
 from .manifest import ManifestError, PluginManifest, load_manifest
@@ -164,3 +165,10 @@ class Catalog:
             raise ManifestError(f"user plugin not registered: {plugin_id}")
         data["plugins"] = kept
         return _write_user_catalog(data)
+
+    def remove_local_package_cache(self, plugin_id: str) -> bool:
+        package_dir = user_package_root() / plugin_id
+        if not package_dir.exists():
+            return False
+        shutil.rmtree(package_dir)
+        return True
