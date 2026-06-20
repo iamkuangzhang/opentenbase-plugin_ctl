@@ -20,6 +20,11 @@ class PluginManifest:
     database: str
     targets: dict[str, bool]
     payload: dict[str, Any]
+    plugin_type: str = "sql"
+    source_files: list[str] = field(default_factory=list)
+    extension_files: list[str] = field(default_factory=list)
+    library_files: list[str] = field(default_factory=list)
+    build: dict[str, Any] = field(default_factory=dict)
     distributed: dict[str, Any] = field(default_factory=dict)
     hooks: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
@@ -69,10 +74,12 @@ class PluginManifest:
             return self.path.parent.parent.parent
         if self.path.name == "manifest.yml" and self.path.parent.parent.name == "plugins" and self.path.parent.parent.parent.name == "examples":
             return self.path.parent.parent.parent.parent
+        if self.path.name in {"manifest.yml", "plugin.yml"}:
+            return self.path.parent
         for parent in [self.path.parent, *self.path.parents]:
             if (parent / "pyproject.toml").exists() and (parent / "src" / "plugin_ctl").exists():
                 return parent
-        if self.path.name in {"manifest.yml", "plugin.yml"} or self.path.suffix in {".yml", ".yaml"}:
+        if self.path.suffix in {".yml", ".yaml"}:
             return self.path.parent
         raise ManifestError(f"cannot locate platform root for manifest {self.path}")
 
@@ -98,6 +105,11 @@ def load_manifest(path: Path) -> PluginManifest:
         database=str(raw["database"]),
         targets=dict(raw["targets"]),
         payload=dict(raw["payload"]),
+        plugin_type=str(raw.get("type") or raw.get("plugin_type") or raw.get("payload", {}).get("type") or "sql"),
+        source_files=list(raw.get("source_files", raw.get("payload", {}).get("source_files", [])) or []),
+        extension_files=list(raw.get("extension_files", raw.get("payload", {}).get("extension_files", [])) or []),
+        library_files=list(raw.get("library_files", raw.get("payload", {}).get("library_files", [])) or []),
+        build=dict(raw.get("build", raw.get("payload", {}).get("build", {})) or {}),
         distributed=dict(raw.get("distributed", {})),
         hooks=dict(raw.get("hooks", {})),
         notes=list(raw.get("notes", [])),

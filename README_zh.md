@@ -44,16 +44,19 @@ plugin_ctl
 
 交互式控制台默认使用英文。历史命令会保存在 `~/.plugin_ctl/history`，
 所以可以用上下方向键查看上一条/下一条命令，退出后再次进入仍然保留。
-输入 `CN` 可将当前会话切换为中文，输入 `EN` 可切回英文。命令名称本身不翻译。
+输入 `CH` 可将当前会话切换为中文，输入 `EN` 可切回英文。命令名称本身不翻译。
 
 然后输入短命令：
 
 ```text
 pluginctl> help
-pluginctl> CN
+pluginctl> CH
 pluginctl> EN
 pluginctl> init
 pluginctl> new my_plugin
+pluginctl> new -sql sql_plugin
+pluginctl> new -c c_plugin
+pluginctl> build c_plugin
 pluginctl> list
 pluginctl> list --all
 pluginctl> deploy my_plugin
@@ -96,6 +99,9 @@ help advanced
 help <command>
 init
 new <plugin_id>
+new -sql <plugin_id>
+new -c <plugin_id>
+build <plugin_id>
 list [plugin_id]
 list --all
 deploy <plugin_id_or_path>
@@ -104,7 +110,7 @@ check <plugin_id_or_path>
 rollback <plugin_id>
 quit
 exit
-CN
+CH
 EN
 ```
 
@@ -117,6 +123,12 @@ help advanced
 ## 命令含义
 
 `new <plugin_id>`：创建一个适合新手学习的插件模板，并自动加入 PluginCtl 管理。
+
+`new -sql <plugin_id>`：显式创建 SQL-only 插件模板。它和默认的 `new <plugin_id>` 行为一致，不需要编译。
+
+`new -c <plugin_id>`：创建最小 C 扩展模板，包含 `Makefile`、`src/<plugin_id>.c`、`.control`、安装 SQL、验证 SQL、回滚 SQL，以及声明 `type: c` 的 manifest。
+
+`build <plugin_id>`：使用 PGXS 编译 C 插件。它会寻找 `pg_config`，执行 `make clean`，再执行 `make PG_CONFIG=<路径>`。它只生成本地 `.so` 文件，不执行 `make install`。C 插件需要先 `build`，再 `deploy`。
 
 `list`：列出用户自己创建或接入的插件。`list --all`：同时显示内置参考插件。`list <plugin_id>`：查看某个插件的 manifest 和最近操作记录。
 
@@ -141,6 +153,8 @@ pluginctl> check ./my_plugin/manifest.yml
 它会按六段输出：插件包结构、扩展文件、PluginCtl 管理状态、OpenTenBase 集群配置、分布式部署状态、注册与验证状态。
 
 最终状态包括 `NEW`、`READY`、`DEPLOYED`、`REGISTERED`、`BROKEN`、`REMOVED`、`UNKNOWN`。只有 `FAIL` 项会让插件变成 `BROKEN`；`WARN`、`SKIP`、`INFO` 会作为提示和下一步建议展示，不会被当成致命错误。
+
+C 插件还可能出现 `BUILD_REQUIRED`。这表示源码和 `Makefile` 已经存在，但声明的 `.so` 文件还没有生成。请先执行 `build <plugin_id>`，再部署。
 
 ## 安全边界
 
@@ -198,3 +212,33 @@ pluginctl> register my_plugin
 pluginctl> check my_plugin
 pluginctl> quit
 ```
+
+C 插件需要先编译，再部署：
+
+```text
+plugin_ctl
+pluginctl> init
+pluginctl> new -c my_c_plugin
+pluginctl> build my_c_plugin
+pluginctl> deploy my_c_plugin
+pluginctl> register my_c_plugin
+pluginctl> check my_c_plugin
+pluginctl> quit
+```
+
+C 扩展的预期状态流转：
+
+```text
+new -c my_c_plugin
+check my_c_plugin      # BUILD_REQUIRED，因为还没有生成 .so
+build my_c_plugin
+check my_c_plugin      # READY，本地插件包完整
+deploy my_c_plugin
+check my_c_plugin      # DEPLOYED，文件已分发到 CN/DN 节点
+register my_c_plugin
+check my_c_plugin      # REGISTERED，CREATE EXTENSION 成功且验证 SQL 通过
+```
+
+生成的 C 模板默认使用标准的 `LANGUAGE C STRICT` SQL。除非你的
+OpenTenBase 构建明确支持 `SHIPPABLE` 语法，否则不要在演示 SQL 里添加
+`SHIPPABLE`，否则 `register` 阶段执行 `CREATE EXTENSION` 可能会失败。

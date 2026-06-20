@@ -14,6 +14,7 @@ TOP_LEVEL_COMMANDS = {
     "add",
     "remove",
     "new",
+    "build",
     "list",
     "inspect",
     "check",
@@ -213,7 +214,7 @@ def run_shell(
         if not line:
             continue
         history.record(line)
-        if line.lower() == "cn":
+        if line.lower() == "ch":
             lang = "zh"
             print(message("language_switched_zh", lang), file=out)
             continue
@@ -276,7 +277,7 @@ def _with_shell_language(argv: list[str], lang: str) -> list[str]:
     if "--json" in argv or "--lang" in argv:
         return argv
     command = argv[0]
-    if command in {"list", "add", "remove", "new", "check"}:
+    if command in {"list", "add", "remove", "new", "build", "check", "deploy"}:
         return [*argv, "--lang", "zh"]
     if command == "plugin" and len(argv) > 1 and argv[1] in {"check", "status", "lint", "plan", "precheck", "diagnose"}:
         return [*argv, "--lang", "zh"]

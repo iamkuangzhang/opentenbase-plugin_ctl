@@ -17,6 +17,7 @@ from .activation import (
     execute_activation,
     extension_name_for,
 )
+from .build import build_plugin
 from .catalog import Catalog
 from .cluster import (
     DEFAULT_DATABASE,
@@ -82,6 +83,7 @@ TOP_LEVEL_COMMANDS = {
     "add",
     "remove",
     "new",
+    "build",
     "list",
     "inspect",
     "check",
@@ -126,15 +128,16 @@ class RegisterPrecheckReport:
 
 class PluginCtlArgumentParser(argparse.ArgumentParser):
     def format_help(self) -> str:
-        return """usage: plugin_ctl [-h] [--version] [--root ROOT] {shell,init,new,list,deploy,register,check,rollback} ...
+        return """usage: plugin_ctl [-h] [--version] [--root ROOT] {shell,init,new,build,list,deploy,register,check,rollback} ...
 
 OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.
 
 positional arguments:
-  {shell,init,new,list,deploy,register,check,rollback}
+  {shell,init,new,build,list,deploy,register,check,rollback}
     shell               interactive plugin lifecycle shell
     init                discover OpenTenBase topology and write the default cluster.toml
     new                 create a starter plugin and add it to PluginCtl
+    build               build a C plugin with PGXS; does not run make install
     list                list plugins or show one plugin
     deploy              add if needed, then copy plugin files to OpenTenBase nodes
     register            run CREATE EXTENSION once on the primary coordinator
@@ -148,6 +151,11 @@ options:
 
 Type "plugin_ctl" to enter the interactive shell.
 Inside the shell, type "help advanced" for compatibility and debugging commands.
+
+new usage:
+  new <name>
+  new -sql <name>
+  new -c <name>
 
 groups: discovery, governance, lifecycle, archive, distributed, reporting, runtime
 """
@@ -209,7 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         dest="command",
         required=True,
-        metavar="{shell,init,new,list,deploy,register,check,rollback}",
+        metavar="{shell,init,new,build,list,deploy,register,check,rollback}",
         parser_class=argparse.ArgumentParser,
     )
 
@@ -221,8 +229,14 @@ def build_parser() -> argparse.ArgumentParser:
     remove_parser.add_argument("plugin_id")
     remove_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help=argparse.SUPPRESS)
     new_parser = subparsers.add_parser("new", help="main flow: create a starter plugin and add it to PluginCtl")
+    new_type = new_parser.add_mutually_exclusive_group()
+    new_type.add_argument("-sql", dest="plugin_type", action="store_const", const="sql", default="sql", help="create a SQL-only plugin skeleton")
+    new_type.add_argument("-c", dest="plugin_type", action="store_const", const="c", help="create a C/PGXS plugin skeleton")
     new_parser.add_argument("plugin_id")
     new_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help=argparse.SUPPRESS)
+    build_parser = subparsers.add_parser("build", help="main flow: build a C plugin with PGXS")
+    build_parser.add_argument("plugin_id")
+    build_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help=argparse.SUPPRESS)
     list_parser = subparsers.add_parser("list", help="main flow: list plugins or show one plugin")
     list_parser.add_argument("plugin_id", nargs="?")
     list_parser.add_argument("--all", action="store_true", help="include built-in reference plugins")
@@ -362,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "deploy":
             cmd.add_argument("--dry-run", action="store_true", help="build physical distribution plan only")
             cmd.add_argument("-f", "--cluster-file", type=Path, help="cluster.toml path; defaults to ./cluster.toml or ~/.plugin_ctl/cluster.toml when present")
+            cmd.add_argument("--lang", choices=["zh", "en", "both"], default=None, help=argparse.SUPPRESS)
         if name == "rollback":
             cmd.add_argument("--dry-run", action="store_true", help="show rollback_sql plan instead of executing it")
         if name == "report":
@@ -511,8 +526,8 @@ def _display_path(path: Path) -> str:
     return f"./{relative.as_posix()}" if str(relative) != "." else "."
 
 
-def cmd_dev_init(plugin_id: str, *, base_dir: Path | None = None, force: bool = False) -> int:
-    result = create_plugin_skeleton(plugin_id, base_dir=base_dir, force=force)
+def cmd_dev_init(plugin_id: str, *, base_dir: Path | None = None, force: bool = False, plugin_type: str = "sql") -> int:
+    result = create_plugin_skeleton(plugin_id, base_dir=base_dir, force=force, plugin_type=plugin_type)
     print(f"Plugin skeleton created: {_display_path(result.target_dir)}")
     print()
     print("Generated files:")
@@ -530,9 +545,9 @@ def cmd_dev_init(plugin_id: str, *, base_dir: Path | None = None, force: bool = 
     return 0
 
 
-def cmd_new(root: Path, plugin_id: str, *, lang: str | None = None) -> int:
+def cmd_new(root: Path, plugin_id: str, *, lang: str | None = None, plugin_type: str = "sql") -> int:
     output_lang = normalize_lang(lang)
-    result = create_plugin_skeleton(plugin_id)
+    result = create_plugin_skeleton(plugin_id, plugin_type=plugin_type)
     manifest, catalog_path = Catalog(root=root).add_user_plugin(result.target_dir)
     print(message("plugin_created", output_lang, plugin_id=manifest.plugin_id))
     print(message("path", output_lang, path=_display_path(result.target_dir)))
@@ -544,6 +559,41 @@ def cmd_new(root: Path, plugin_id: str, *, lang: str | None = None) -> int:
     print(f"  register {manifest.plugin_id}")
     print(f"  check {manifest.plugin_id}")
     return 0
+
+
+def cmd_build(root: Path, plugin_id: str, *, lang: str | None = None) -> int:
+    output_lang = normalize_lang(lang)
+    manifest = Catalog(root=root).load_one(plugin_id)
+    result = build_plugin(manifest)
+    if result.skipped:
+        print(message("build_sql_only", output_lang, plugin_id=plugin_id))
+        return 0
+    print(message("build_start", output_lang, plugin_id=plugin_id))
+    if result.pg_config:
+        print(f"PG_CONFIG: {result.pg_config}")
+    if result.stdout.strip():
+        print("stdout:")
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print("stderr:")
+        print(result.stderr.strip())
+    if result.ok:
+        print(message("build_success", output_lang, plugin_id=plugin_id))
+        return 0
+    print(message("build_failed", output_lang, plugin_id=plugin_id, detail=_localized_build_detail(result.detail, output_lang)))
+    return result.returncode or 1
+
+
+def _localized_build_detail(detail: str, lang: str) -> str:
+    if detail == "pg_config not found":
+        return message("build_missing_pg_config", lang)
+    if detail == "make not found":
+        return message("build_missing_make", lang)
+    if detail.startswith("missing build input: "):
+        return message("build_missing_input", lang, detail=detail.split(": ", 1)[1])
+    if detail.startswith("build artifact missing: "):
+        return message("build_missing_artifact", lang, detail=detail.split(": ", 1)[1])
+    return detail
 
 
 def cmd_inspect(root: Path, plugin_id: str) -> int:
@@ -1294,6 +1344,7 @@ def cmd_deploy_physical_distribution(
     *,
     dry_run: bool = False,
     execute: bool = False,
+    lang: str | None = None,
 ) -> int:
     config = load_cluster_config(cluster_file)
     manifest = Catalog(root=root).load_one(plugin_id)
@@ -1310,7 +1361,7 @@ def cmd_deploy_physical_distribution(
         if plan.errors:
             print("Errors:")
             for error in plan.errors:
-                print(f"- {error}")
+                print(f"- {_localized_distribution_error(error, manifest.plugin_id, lang)}")
             print("Result: FAILED")
             return 1
         print("Result: OK")
@@ -1320,7 +1371,7 @@ def cmd_deploy_physical_distribution(
         print("Physical distribution: blocked")
         print("Errors:")
         for error in plan.errors:
-            print(f"- {error}")
+            print(f"- {_localized_distribution_error(error, manifest.plugin_id, lang)}")
         print("Result: FAILED")
         return 1
 
@@ -1360,6 +1411,16 @@ def cmd_deploy_physical_distribution(
         return 1
     print("Result: OK")
     return 0
+
+
+def _localized_distribution_error(error: str, plugin_id: str, lang: str | None) -> str:
+    if error.startswith("Build artifact missing:"):
+        artifact = error.removeprefix("Build artifact missing:").strip()
+        text = message("build_missing_artifact", lang, detail=artifact)
+        if lang == "zh":
+            return f"{text}\n请先执行“build {plugin_id}”，再进行部署。"
+        return f"{text}\nRun 'build {plugin_id}' before deployment."
+    return error
 
 
 def _render_activation_report(report) -> None:
@@ -1707,7 +1768,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "remove":
             return cmd_remove(args.root, args.plugin_id, lang=args.lang)
         if args.command == "new":
-            return cmd_new(args.root, args.plugin_id, lang=args.lang)
+            return cmd_new(args.root, args.plugin_id, lang=args.lang, plugin_type=args.plugin_type)
+        if args.command == "build":
+            return cmd_build(args.root, args.plugin_id, lang=args.lang)
         if args.command == "list":
             if args.plugin_id:
                 return cmd_list_one(args.root, args.plugin_id, lang=args.lang)
@@ -1788,6 +1851,7 @@ def main(argv: list[str] | None = None) -> int:
                 require_cluster_config(args.cluster_file),
                 dry_run=args.dry_run,
                 execute=not args.dry_run,
+                lang=args.lang,
             )
         if args.command == "rollback":
             return cmd_rollback(args.root, args.plugin_id or "otb_timeseries", execute=not args.dry_run)

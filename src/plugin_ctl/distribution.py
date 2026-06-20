@@ -112,11 +112,7 @@ def physical_payload_files(manifest: PluginManifest) -> tuple[Path, ...]:
     candidate_paths.append(manifest.install_sql)
 
     for key in ("extension_files", "library_files"):
-        values = manifest.payload.get(key, [])
-        if isinstance(values, str):
-            values = [values]
-        if not isinstance(values, list):
-            continue
+        values = [*_as_list(getattr(manifest, key, [])), *_as_list(manifest.payload.get(key, []))]
         for value in values:
             if not isinstance(value, str):
                 continue
@@ -126,6 +122,14 @@ def physical_payload_files(manifest: PluginManifest) -> tuple[Path, ...]:
 
     # 保持稳定顺序，同时去重。
     return tuple(sorted(dict.fromkeys(candidate_paths)))
+
+
+def _as_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
 
 
 def build_distribution_plan(cluster: ClusterConfig, manifest: PluginManifest) -> DistributionPlan:
@@ -148,7 +152,10 @@ def build_distribution_plan(cluster: ClusterConfig, manifest: PluginManifest) ->
     for local_path in payload_files:
         exists = local_path.exists() and local_path.is_file()
         if not exists:
-            errors.append(f"payload file missing: {local_path}")
+            if manifest.plugin_type == "c" and local_path.suffix.lower() == ".so":
+                errors.append(f"Build artifact missing: {local_path.name}\nRun 'build {manifest.plugin_id}' before deployment.")
+            else:
+                errors.append(f"payload file missing: {local_path}")
         for node in nodes:
             try:
                 remote_path = _remote_target_path(node, local_path)

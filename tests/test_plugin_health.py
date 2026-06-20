@@ -225,6 +225,18 @@ class PluginHealthTest(unittest.TestCase):
 
         self.assertEqual(report.final_status, "REMOVED")
 
+    def test_deployed_files_override_old_removed_state(self) -> None:
+        plugin_dir = write_extension_plugin(self.tmp)
+        cluster_file = self.tmp / "cluster.toml"
+        cluster_file.write_text(CLUSTER_TOML, encoding="utf-8")
+        env = {**self.env, "OPENTENBASE_PLUGINCTL_CLUSTER_FILE": str(cluster_file)}
+        with patch.dict(os.environ, env):
+            Catalog(root=self.tmp).add_user_plugin(plugin_dir)
+            StateStore(self.tmp).append("health_demo", "rollback", True, "rollback passed")
+            report = self.build_report("health_demo", installed=False, removed=True)
+
+        self.assertEqual(report.final_status, "DEPLOYED")
+
     def test_control_version_mismatch_is_broken(self) -> None:
         plugin_dir = write_extension_plugin(self.tmp, control_version="9.9.9")
         with patch.dict(os.environ, self.env):

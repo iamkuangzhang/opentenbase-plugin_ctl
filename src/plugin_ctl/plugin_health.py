@@ -164,6 +164,8 @@ def _health_next_step(report: PluginHealthReport, lang: str) -> str:
         return "Plugin files are distributed; next run register <plugin_id>."
     if report.final_status == "READY":
         return "The plugin package is basically ready; run init to generate the default cluster.toml, then deploy."
+    if report.final_status == "BUILD_REQUIRED":
+        return f"C source and Makefile are ready, but the .so artifact is missing; run build {report.plugin_id} first."
     return report.next_step
 
 
@@ -269,7 +271,7 @@ def _check_extension_files(manifest: PluginManifest, section: HealthSection) -> 
     payload_files = list(physical_payload_files(manifest))
     controls = [path for path in payload_files if path.suffix.lower() == ".control"]
     sql_files = [path for path in payload_files if path.suffix.lower() == ".sql"]
-    library_files = [path for path in payload_files if path.suffix.lower() == ".so"]
+    library_files = [path for path in payload_files if path.suffix.lower() == ".so" and path.exists()]
 
     section.items.append(HealthItem("payload_files", "OK" if payload_files else "WARN", f"{len(payload_files)} physical file(s) detected"))
     _declared_optional_files(manifest, section)
@@ -291,9 +293,13 @@ def _check_extension_files(manifest: PluginManifest, section: HealthSection) -> 
     else:
         section.items.append(HealthItem("sql_file", "FAIL", "no .sql payload files detected"))
 
-    if manifest.payload.get("library_files") or library_files:
+    declared_library_files = list(dict.fromkeys([*_as_list(manifest.library_files), *_as_list(manifest.payload.get("library_files", []))]))
+    if declared_library_files or library_files:
         if library_files:
             section.items.append(HealthItem("library_files", "OK", f"{len(library_files)} .so file(s) declared/detected"))
+        elif manifest.plugin_type == "c":
+            missing = ", ".join(str(item) for item in declared_library_files if item) or f"{manifest.plugin_id}.so"
+            section.items.append(HealthItem("build_artifact", "BUILD_REQUIRED", f"missing: {missing}; run build {manifest.plugin_id}"))
         else:
             section.items.append(HealthItem("library_files", "FAIL", "library_files declared but no .so payload file detected"))
     else:
@@ -315,10 +321,22 @@ def _declared_optional_files(manifest: PluginManifest, section: HealthSection) -
                 if not path.exists():
                     missing.append(str(raw))
             section.items.append(
-                HealthItem(field_name, "OK" if not missing else "FAIL", "declared" if not missing else "missing: " + ", ".join(missing))
+                HealthItem(
+                    field_name,
+                    "OK" if not missing else "BUILD_REQUIRED" if field_name == "library_files" and manifest.plugin_type == "c" else "FAIL",
+                    "declared" if not missing else "missing: " + ", ".join(missing),
+                )
             )
         else:
             section.items.append(HealthItem(field_name, "OK", str(value)))
+
+
+def _as_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
 
 
 def _control_detail(manifest: PluginManifest, control: Path) -> str:
@@ -433,10 +451,13 @@ def _check_cluster(
     )
 
     plan = build_distribution_plan(cluster, manifest)
+    plan_status = "OK"
+    if plan.errors:
+        plan_status = "BUILD_REQUIRED" if _distribution_errors_are_missing_build_artifacts(manifest, plan.errors) else "FAIL"
     deploy_section.items.append(
         HealthItem(
             "distribution_plan",
-            "OK" if not plan.errors else "FAIL",
+            plan_status,
             f"{len(plan.plan)} file-node copy item(s); errors={len(plan.errors)}",
             {"errors": list(plan.errors)},
         )
@@ -459,6 +480,12 @@ def _check_cluster(
     else:
         deploy_section.items.append(HealthItem("remote_files", "SKIP", "no remote payload files checked"))
     return cluster_path, report
+
+
+def _distribution_errors_are_missing_build_artifacts(manifest: PluginManifest, errors: tuple[str, ...]) -> bool:
+    if manifest.plugin_type != "c":
+        return False
+    return bool(errors) and all(error.startswith("Build artifact missing:") for error in errors)
 
 
 def _check_registration_and_verify(
@@ -515,14 +542,10 @@ def _final_status(
 ) -> tuple[str, str]:
     if any(item.status == "FAIL" for section in sections for item in section.items):
         return "BROKEN", "先修复 manifest、SQL/control 文件或插件包结构。"
+    if any(item.status == "BUILD_REQUIRED" for section in sections for item in section.items):
+        return "BUILD_REQUIRED", "C 插件源码和 Makefile 已就绪，但缺少 .so；请先执行 build <plugin_id>。"
     if not catalog_registered:
         return "NEW", "插件目录可检查，但还未进入 catalog；下一步可以执行 deploy <path>。"
-
-    last_rollback = _latest_action(recent_actions, "rollback")
-    if last_rollback and last_rollback.get("ok"):
-        removed = _find_item(sections[5], "removed_probe")
-        if removed and removed.status == "OK":
-            return "REMOVED", "插件已回滚并通过移除验证；需要重新使用时执行 deploy 和 register。"
 
     registered_item = _find_item(sections[5], "pg_extension")
     verify_item = _find_item(sections[5], "verify_sql")
@@ -532,6 +555,12 @@ def _final_status(
     remote_item = _find_item(sections[4], "remote_files")
     if remote_item and remote_item.status == "OK":
         return "DEPLOYED", "插件文件已分发，下一步执行 register <plugin_id>。"
+
+    last_rollback = _latest_action(recent_actions, "rollback")
+    if last_rollback and last_rollback.get("ok"):
+        removed = _find_item(sections[5], "removed_probe")
+        if removed and removed.status == "OK":
+            return "REMOVED", "插件已回滚并通过移除验证；需要重新使用时执行 deploy 和 register。"
 
     if cluster_path is None:
         return "READY", "插件包基本可用；先执行 init 生成默认 cluster.toml，再 deploy。"

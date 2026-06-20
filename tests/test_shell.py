@@ -132,7 +132,7 @@ class PluginCtlShellTest(unittest.TestCase):
         code = run_shell(
             self.root,
             dispatcher=lambda argv: 0,
-            input_func=self._input(["help", "CN", "help", "wat", "EN", "help", "wat", "quit"]),
+            input_func=self._input(["help", "CH", "help", "wat", "EN", "help", "wat", "quit"]),
             output=output,
         )
 
@@ -148,17 +148,27 @@ class PluginCtlShellTest(unittest.TestCase):
     def test_lowercase_language_switches_work(self) -> None:
         output = io.StringIO()
 
-        code = run_shell(self.root, dispatcher=lambda argv: 0, input_func=self._input(["cn", "en", "quit"]), output=output)
+        code = run_shell(self.root, dispatcher=lambda argv: 0, input_func=self._input(["ch", "en", "quit"]), output=output)
 
         self.assertEqual(code, 0)
         text = output.getvalue()
         self.assertIn("已切换到中文。", text)
         self.assertIn("Language switched to English.", text)
 
+    def test_cn_is_not_language_switch(self) -> None:
+        output = io.StringIO()
+
+        code = run_shell(self.root, dispatcher=lambda argv: 0, input_func=self._input(["CN", "quit"]), output=output)
+
+        self.assertEqual(code, 0)
+        text = output.getvalue()
+        self.assertIn('Unknown command. Type "help" to show commands.', text)
+        self.assertNotIn("已切换到中文。", text)
+
     def test_help_command_specific_output_is_localized(self) -> None:
         output = io.StringIO()
 
-        code = run_shell(self.root, dispatcher=lambda argv: 0, input_func=self._input(["help deploy", "CN", "help deploy", "quit"]), output=output)
+        code = run_shell(self.root, dispatcher=lambda argv: 0, input_func=self._input(["help deploy", "CH", "help deploy", "quit"]), output=output)
 
         self.assertEqual(code, 0)
         text = output.getvalue()
@@ -288,7 +298,7 @@ class PluginCtlShellTest(unittest.TestCase):
         def dispatch(argv: list[str]) -> int:
             raise SystemExit(2)
 
-        code = run_shell(self.root, dispatcher=dispatch, input_func=self._input(["CN", "list", "quit"]), output=output)
+        code = run_shell(self.root, dispatcher=dispatch, input_func=self._input(["CH", "list", "quit"]), output=output)
 
         self.assertEqual(code, 0)
         self.assertIn("命令退出，状态码 2。", output.getvalue())
@@ -403,7 +413,7 @@ class PluginCtlShellTest(unittest.TestCase):
         code = run_shell(
             self.root,
             dispatcher=lambda argv: calls.append(argv) or 0,
-            input_func=self._input(["CN", "list", "quit"]),
+            input_func=self._input(["CH", "list", "quit"]),
             output=output,
         )
 

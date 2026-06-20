@@ -44,17 +44,20 @@ plugin_ctl
 
 The shell defaults to English. It keeps command history in `~/.plugin_ctl/history`,
 so the up/down arrow keys can browse previous commands, even after you exit and
-enter the shell again. Type `CN` to switch the current session to Chinese, and
+enter the shell again. Type `CH` to switch the current session to Chinese, and
 type `EN` to switch back to English. Command names stay in English.
 
 Then use the short commands:
 
 ```text
 pluginctl> help
-pluginctl> CN
+pluginctl> CH
 pluginctl> EN
 pluginctl> init
 pluginctl> new my_plugin
+pluginctl> new -sql sql_plugin
+pluginctl> new -c c_plugin
+pluginctl> build c_plugin
 pluginctl> list
 pluginctl> list --all
 pluginctl> deploy my_plugin
@@ -97,6 +100,9 @@ help advanced
 help <command>
 init
 new <plugin_id>
+new -sql <plugin_id>
+new -c <plugin_id>
+build <plugin_id>
 list [plugin_id]
 list --all
 deploy <plugin_id_or_path>
@@ -105,7 +111,7 @@ check <plugin_id_or_path>
 rollback <plugin_id>
 quit
 exit
-CN
+CH
 EN
 ```
 
@@ -114,6 +120,12 @@ Use `help advanced` for compatibility and debugging commands.
 ## Command Meaning
 
 `new <plugin_id>` creates a beginner plugin template and automatically adds it to PluginCtl.
+
+`new -sql <plugin_id>` explicitly creates a SQL-only plugin template. This is the same template as the default `new <plugin_id>` and does not require compilation.
+
+`new -c <plugin_id>` creates a minimal C extension template with `Makefile`, `src/<plugin_id>.c`, `.control`, install SQL, verify SQL, rollback SQL, and a manifest that declares `type: c`.
+
+`build <plugin_id>` builds a C plugin with PGXS. It finds `pg_config`, runs `make clean`, then runs `make PG_CONFIG=<path>`. It only produces the local `.so` artifact and never runs `make install`. Run `build` before `deploy` for C plugins.
 
 `list` shows user-created or user-added plugins. `list --all` also shows built-in reference plugins. `list <plugin_id>` shows one plugin manifest and recent action records.
 
@@ -138,6 +150,8 @@ pluginctl> check ./my_plugin/manifest.yml
 It prints six grouped sections: package structure, extension files, PluginCtl management state, OpenTenBase cluster config, distributed deployment state, and registration/verification state.
 
 Final statuses are `NEW`, `READY`, `DEPLOYED`, `REGISTERED`, `BROKEN`, `REMOVED`, and `UNKNOWN`. Only `FAIL` items make a plugin `BROKEN`; `WARN`, `SKIP`, and `INFO` are reported with next-step hints instead of being treated as fatal.
+
+C plugins can also report `BUILD_REQUIRED`. This means the source files and `Makefile` are present, but the declared `.so` file does not exist yet. Run `build <plugin_id>` before deployment.
 
 ## Safety Boundary
 
@@ -195,3 +209,33 @@ pluginctl> register my_plugin
 pluginctl> check my_plugin
 pluginctl> quit
 ```
+
+For a C plugin, build first and then deploy:
+
+```text
+plugin_ctl
+pluginctl> init
+pluginctl> new -c my_c_plugin
+pluginctl> build my_c_plugin
+pluginctl> deploy my_c_plugin
+pluginctl> register my_c_plugin
+pluginctl> check my_c_plugin
+pluginctl> quit
+```
+
+Expected status flow for a C extension:
+
+```text
+new -c my_c_plugin
+check my_c_plugin      # BUILD_REQUIRED, because the .so file is not built yet
+build my_c_plugin
+check my_c_plugin      # READY, local package is complete
+deploy my_c_plugin
+check my_c_plugin      # DEPLOYED, files are distributed to CN/DN nodes
+register my_c_plugin
+check my_c_plugin      # REGISTERED, CREATE EXTENSION succeeded and verify SQL passed
+```
+
+The generated C template uses standard `LANGUAGE C STRICT` SQL. Do not add
+`SHIPPABLE` to the demo SQL unless your OpenTenBase build explicitly supports
+that syntax; otherwise `CREATE EXTENSION` may fail during `register`.
