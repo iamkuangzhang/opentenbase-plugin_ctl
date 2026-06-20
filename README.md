@@ -6,6 +6,14 @@ OpenTenBase PluginCtl is a CLI-first plugin lifecycle controller for OpenTenBase
 
 It focuses on plugin package discovery, physical distribution, extension registration, health checks, rollback, and reports. It is not an OpenTenBase cluster operations platform, a Web console, or a plugin marketplace.
 
+## Project Status
+
+Current version: **1.0.0**.
+
+This is the first complete public command-line version for development and test environments. It has a working interactive shell, SQL-only and C extension scaffolding, PGXS build support, distributed file deployment, primary-coordinator registration, health checks, rollback, and local reports.
+
+It is still not a production guarantee. Review generated deployment plans before using it on important clusters, and treat rollback as best-effort object cleanup rather than disaster recovery.
+
 The public entrypoint is:
 
 ```bash

@@ -1,6 +1,6 @@
 ﻿# Contributing
 
-OpenTenBase PluginCtl is currently in the v0.1.0 source release stage. Contributions should keep the project focused on OpenTenBase distributed plugin lifecycle governance.
+OpenTenBase PluginCtl is currently in the v1.0.0 public CLI release stage. Contributions should keep the project focused on OpenTenBase distributed plugin lifecycle governance for development and test environments.
 
 ## Scope
 
@@ -16,9 +16,9 @@ Out of scope for now:
 
 - Web UI
 - plugin marketplace
-- batch deploy
+- batch deployment
 - automatic repair
-- cluster start
+- cluster lifecycle management
 - cross-database adapters
 - destructive rollback for `otb_timeseries`
 
@@ -33,4 +33,4 @@ Before opening a PR, run the full test suite and include the command output summ
 
 ## Safety
 
-Do not add commands that modify a database unless the command has clear documentation and a safe `--dry-run` preview when practical. Role hooks must remain non-executing unless a future release introduces an explicit `--run-hooks` boundary.
+Do not add commands that modify a database unless the command has clear documentation, a visible plan or precheck step, and an explicit execution boundary. Role hooks must remain non-executing unless a future release introduces an explicit hook execution boundary.
