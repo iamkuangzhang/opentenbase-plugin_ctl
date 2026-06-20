@@ -32,6 +32,7 @@ class ClusterNode:
 class ClusterConfig:
     name: str
     nodes: tuple[ClusterNode, ...]
+    backend: str = "manual"
 
     @property
     def coordinators(self) -> tuple[ClusterNode, ...]:
@@ -162,7 +163,8 @@ def load_cluster_config(path: str | Path) -> ClusterConfig:
             )
         )
 
-    return ClusterConfig(name=cluster_name, nodes=tuple(nodes))
+    backend = str(raw_cluster.get("backend") or "manual")
+    return ClusterConfig(name=cluster_name, nodes=tuple(nodes), backend=backend)
 
 
 def discover_cluster_config(
@@ -212,7 +214,7 @@ def discover_cluster_config(
 
     if not nodes:
         raise ValueError("no CN/DN rows found in pgxc_node")
-    return ClusterConfig(name=name, nodes=tuple(nodes))
+    return ClusterConfig(name=name, nodes=tuple(nodes), backend="sql")
 
 
 def render_cluster_config(config: ClusterConfig) -> str:
@@ -222,6 +224,7 @@ def render_cluster_config(config: ClusterConfig) -> str:
         "",
         "[cluster]",
         f'name = "{config.name}"',
+        f'backend = "{config.backend}"',
         "",
     ]
     for node in config.nodes:

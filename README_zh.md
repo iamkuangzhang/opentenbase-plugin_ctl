@@ -12,6 +12,13 @@ OpenTenBase PluginCtl 是一个面向 OpenTenBase 的命令行优先插件生命
 plugin_ctl
 ```
 
+当前版本：
+
+```bash
+plugin_ctl --version
+# plugin_ctl 1.0.0
+```
+
 ## 安装
 
 ```bash
@@ -35,9 +42,16 @@ plugin_ctl list
 plugin_ctl
 ```
 
+交互式控制台默认使用英文。历史命令会保存在 `~/.plugin_ctl/history`，
+所以可以用上下方向键查看上一条/下一条命令，退出后再次进入仍然保留。
+输入 `CN` 可将当前会话切换为中文，输入 `EN` 可切回英文。命令名称本身不翻译。
+
 然后输入短命令：
 
 ```text
+pluginctl> help
+pluginctl> CN
+pluginctl> EN
 pluginctl> init
 pluginctl> new my_plugin
 pluginctl> list
@@ -48,7 +62,16 @@ pluginctl> check my_plugin
 pluginctl> quit
 ```
 
-`init` 会读取当前已经启动的 OpenTenBase 拓扑，并写入 PluginCtl 默认的 `cluster.toml`。它不负责启动、停止、初始化或监控 OpenTenBase 集群。
+`init` 会读取当前已经启动的 OpenTenBase 拓扑，并写入 PluginCtl 默认的 `cluster.toml`。它会优先使用 `opentenbase_ctl status`，如果当前环境没有可用的 `opentenbase_ctl`，才会兼容性地通过数据库里的 `pgxc_node` 发现拓扑。它不负责启动、停止、初始化或监控 OpenTenBase 集群。
+
+推荐的集群使用流程：
+
+```bash
+su - opentenbase
+opentenbase_ctl start
+opentenbase_ctl status
+plugin_ctl
+```
 
 ## 接入已有插件目录
 
@@ -69,6 +92,8 @@ pluginctl> check my_existing_plugin
 
 ```text
 help
+help advanced
+help <command>
 init
 new <plugin_id>
 list [plugin_id]
@@ -79,6 +104,8 @@ check <plugin_id_or_path>
 rollback <plugin_id>
 quit
 exit
+CN
+EN
 ```
 
 需要兼容命令和调试命令时，输入：

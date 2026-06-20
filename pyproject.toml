@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opentenbase-plugin_ctl"
-version = "0.1.0"
 description = "CLI-first lifecycle governance tool for OpenTenBase distributed plugins"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "iamkuangzhang" }]
+dynamic = ["version"]
 dependencies = [
     "PyYAML>=6.0",
 ]
@@ -22,3 +22,6 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "plugin_ctl.__version__" }

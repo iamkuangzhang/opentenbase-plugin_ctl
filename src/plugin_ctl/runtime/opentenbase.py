@@ -1,10 +1,12 @@
 ﻿from __future__ import annotations
 
 import shutil
+import shlex
 import subprocess
 from dataclasses import dataclass
 import os
-from pathlib import Path
+import re
+from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from plugin_ctl.cluster import ClusterNode
@@ -93,6 +95,126 @@ class ScpSshRemoteExecutor:
 
     def sha256_file(self, node: ClusterNode, remote_path: str) -> RemoteCommandResult:
         # 对账卡点：后续可用该结果和本地 SHA256 做强校验。
+        return self.run(node, ["sha256sum", remote_path])
+
+
+@dataclass(slots=True)
+class OpenTenBaseCtlRemoteExecutor:
+    binary: str = "opentenbase_ctl"
+    timeout_seconds: int = 60
+
+    def _runtime_env(self) -> dict[str, str]:
+        env = os.environ.copy()
+        binary_path = shutil.which(self.binary) or self.binary
+        try:
+            prefix = Path(binary_path).resolve().parent.parent
+        except OSError:
+            return env
+        candidate_dirs = [
+            prefix / "lib",
+            prefix / "lib64",
+            Path("/usr/local/lib64"),
+            Path("/usr/local/lib"),
+        ]
+        current = env.get("LD_LIBRARY_PATH", "")
+        parts = [part for part in current.split(":") if part]
+        for lib_dir in candidate_dirs:
+            lib_text = str(lib_dir)
+            if lib_dir.exists() and lib_text not in parts:
+                parts.insert(0, lib_text)
+        if parts:
+            env["LD_LIBRARY_PATH"] = ":".join(parts)
+        return env
+
+    def _extract_shell_stdout(self, stdout: str) -> str:
+        lines = stdout.splitlines()
+        chunks: list[str] = []
+        collecting = False
+        saw_result_marker = False
+        for line in lines:
+            if re.match(r"^\[\s*[^]]+\s*\]\s+Result:\s*$", line):
+                collecting = True
+                saw_result_marker = True
+                continue
+            if collecting and line.startswith("Total:"):
+                break
+            if collecting:
+                chunks.append(line)
+        if not saw_result_marker:
+            return stdout
+        while chunks and not chunks[0].strip():
+            chunks.pop(0)
+        while chunks and not chunks[-1].strip():
+            chunks.pop()
+        if not chunks:
+            return ""
+        return "\n".join(chunks) + "\n"
+
+    def _run(self, node: ClusterNode, argv: list[str]) -> RemoteCommandResult:
+        try:
+            result = subprocess.run(
+                argv,
+                check=False,
+                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                env=self._runtime_env(),
+                timeout=self.timeout_seconds,
+            )
+            return RemoteCommandResult(
+                node=node.name,
+                argv=tuple(argv),
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
+        except subprocess.TimeoutExpired as exc:
+            return RemoteCommandResult(
+                node=node.name,
+                argv=tuple(str(part) for part in exc.cmd),
+                returncode=124,
+                stdout=exc.stdout or "",
+                stderr=f"command timed out after {self.timeout_seconds}s",
+            )
+
+    def run(self, node: ClusterNode, argv: list[str]) -> RemoteCommandResult:
+        command = shlex.join(argv)
+        result = self._run(
+            node,
+            [
+                self.binary,
+                "shell",
+                "-n",
+                node.name,
+                "--cmd",
+                command,
+            ],
+        )
+        return RemoteCommandResult(
+            node=result.node,
+            argv=result.argv,
+            returncode=result.returncode,
+            stdout=self._extract_shell_stdout(result.stdout),
+            stderr=result.stderr,
+        )
+
+    def copy_file(self, node: ClusterNode, local_path: Path, remote_path: str) -> RemoteCommandResult:
+        remote_dir = str(PurePosixPath(remote_path).parent)
+        return self._run(
+            node,
+            [
+                self.binary,
+                "scp",
+                "-n",
+                node.name,
+                "--source-file",
+                str(local_path),
+                "--dest-path",
+                remote_dir,
+            ],
+        )
+
+    def sha256_file(self, node: ClusterNode, remote_path: str) -> RemoteCommandResult:
         return self.run(node, ["sha256sum", remote_path])
 
 

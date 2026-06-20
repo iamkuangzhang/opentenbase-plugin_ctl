@@ -48,6 +48,7 @@ from .distributed_verify import distributed_verify_report_json, run_distributed_
 from .doctor import run_doctor
 from .i18n import message, normalize_lang, text, value
 from .manifest import ManifestError
+from .opentenbase_ctl_backend import OpenTenBaseCtlBackend, OpenTenBaseCtlError
 from .plugin_archive import ArchiveStore, archive_list_json, archive_record_json, build_archive_record
 from .plugin_consistency import consistency_check, consistency_items_json
 from .plugin_diagnose import PluginDiagnosis, diagnose_plugin, diagnosis_json, diagnosis_summary_json, diagnosis_rows
@@ -71,7 +72,7 @@ from .rollback import rollback_plugin
 from .shell import run_shell
 from .source_assess import assess_items_json, assess_source
 from .state_store import StateStore
-from .runtime.opentenbase import OpenTenBaseRuntime, ScpSshRemoteExecutor
+from .runtime.opentenbase import OpenTenBaseCtlRemoteExecutor, OpenTenBaseRuntime, ScpSshRemoteExecutor
 from .verify import run_removed_verify, run_smoke_verify
 from .util import render_table
 
@@ -132,7 +133,7 @@ OpenTenBase PluginCtl: plugin-centered lifecycle governance for OpenTenBase.
 positional arguments:
   {shell,init,new,list,deploy,register,check,rollback}
     shell               interactive plugin lifecycle shell
-    init                discover pgxc_node and write the default cluster.toml
+    init                discover OpenTenBase topology and write the default cluster.toml
     new                 create a starter plugin and add it to PluginCtl
     list                list plugins or show one plugin
     deploy              add if needed, then copy plugin files to OpenTenBase nodes
@@ -202,7 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
             "distributed=plugin roles/consistency; runtime=doctor/cluster status"
         ),
     )
-    parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument("--version", action="version", version=f"plugin_ctl {__version__}")
     parser.add_argument("--root", type=Path, default=platform_root(), help="platform directory root")
 
     subparsers = parser.add_subparsers(
@@ -215,14 +216,18 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("shell", help="interactive plugin lifecycle shell")
     add_parser = subparsers.add_parser("add", help=argparse.SUPPRESS)
     add_parser.add_argument("plugin_path", type=Path)
+    add_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help=argparse.SUPPRESS)
     remove_parser = subparsers.add_parser("remove", help=argparse.SUPPRESS)
     remove_parser.add_argument("plugin_id")
+    remove_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help=argparse.SUPPRESS)
     new_parser = subparsers.add_parser("new", help="main flow: create a starter plugin and add it to PluginCtl")
     new_parser.add_argument("plugin_id")
+    new_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help=argparse.SUPPRESS)
     list_parser = subparsers.add_parser("list", help="main flow: list plugins or show one plugin")
     list_parser.add_argument("plugin_id", nargs="?")
     list_parser.add_argument("--all", action="store_true", help="include built-in reference plugins")
     list_parser.add_argument("--builtin", action="store_true", help="show only built-in reference plugins")
+    list_parser.add_argument("--lang", choices=["zh", "en", "both"], default=None, help=argparse.SUPPRESS)
 
     inspect_parser = subparsers.add_parser("inspect", help=argparse.SUPPRESS)
     inspect_parser.add_argument("plugin_id")
@@ -250,6 +255,9 @@ def build_parser() -> argparse.ArgumentParser:
     def add_cluster_init_args(command_parser: argparse.ArgumentParser) -> None:
         command_parser.add_argument("--output", type=Path, default=None, help="output path; defaults to ~/.plugin_ctl/cluster.toml")
         command_parser.add_argument("--name", default="local-opentenbase", help="cluster name written to the config")
+        command_parser.add_argument("--backend", choices=["auto", "opentenbase_ctl", "sql"], default="auto", help="cluster discovery backend")
+        command_parser.add_argument("--opentenbase-ctl", default=None, help="opentenbase_ctl binary path")
+        command_parser.add_argument("--opentenbase-ctl-config", type=Path, default=None, help="opentenbase_ctl config path")
         command_parser.add_argument("--ssh-user", default=DEFAULT_SSH_USER, help="SSH user for physical file distribution")
         command_parser.add_argument("--db-user", default=DEFAULT_DB_USER, help="database user written to node entries")
         command_parser.add_argument("--database", default=DEFAULT_DATABASE, help="database name written to node entries")
@@ -257,7 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
         command_parser.add_argument("--lib-dir", default=DEFAULT_LIB_DIR, help="OpenTenBase library directory")
         command_parser.add_argument("--extension-dir", default=DEFAULT_EXTENSION_DIR, help="OpenTenBase extension SQL/control directory")
 
-    init_parser = subparsers.add_parser("init", help="discover pgxc_node and write the default cluster.toml")
+    init_parser = subparsers.add_parser("init", help="discover OpenTenBase topology and write the default cluster.toml")
     add_cluster_init_args(init_parser)
 
     doctor_parser = subparsers.add_parser("doctor", help=argparse.SUPPRESS)
@@ -277,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
     cluster_parser = subparsers.add_parser("cluster", help=argparse.SUPPRESS)
     cluster_subparsers = cluster_parser.add_subparsers(dest="cluster_command", required=True)
     cluster_subparsers.add_parser("status", help="read-only local Docker/OpenTenBase status")
-    cluster_init_parser = cluster_subparsers.add_parser("init", help="discover pgxc_node and write the default cluster.toml")
+    cluster_init_parser = cluster_subparsers.add_parser("init", help="discover OpenTenBase topology and write the default cluster.toml")
     add_cluster_init_args(cluster_init_parser)
     cluster_inspect_parser = cluster_subparsers.add_parser("inspect", help="distributed: inspect a cluster.toml topology")
     cluster_inspect_parser.add_argument("-f", "--file", type=Path, help="cluster.toml path; defaults to ./cluster.toml or ~/.plugin_ctl/cluster.toml")
@@ -385,72 +393,113 @@ def ensure_plugin_registered(root: Path, plugin_id_or_path: str, *, announce: bo
     return manifest.plugin_id, True, catalog_path
 
 
-def cmd_list(root: Path, *, include_builtin: bool = False, builtin_only: bool = False) -> int:
+def _merge_ctl_and_sql_topology(ctl_config: ClusterConfig, sql_config: ClusterConfig) -> ClusterConfig:
+    nodes: list[ClusterNode] = []
+    for role in ("cn", "dn"):
+        ctl_nodes = sorted((node for node in ctl_config.nodes if node.role == role), key=lambda item: item.name)
+        sql_nodes = sorted((node for node in sql_config.nodes if node.role == role), key=lambda item: item.name)
+        if len(ctl_nodes) != len(sql_nodes):
+            return ctl_config
+        for ctl_node, sql_node in zip(ctl_nodes, sql_nodes):
+            nodes.append(
+                ClusterNode(
+                    name=ctl_node.name,
+                    role=ctl_node.role,
+                    host=ctl_node.host,
+                    ssh_port=ctl_node.ssh_port,
+                    db_port=sql_node.db_port,
+                    ssh_user=ctl_node.ssh_user,
+                    db_user=sql_node.db_user,
+                    database=sql_node.database,
+                    lib_dir=ctl_node.lib_dir,
+                    extension_dir=ctl_node.extension_dir,
+                )
+            )
+    return ClusterConfig(name=ctl_config.name, nodes=tuple(nodes), backend="opentenbase_ctl")
+
+
+def cmd_list(root: Path, *, include_builtin: bool = False, builtin_only: bool = False, lang: str | None = None) -> int:
+    output_lang = normalize_lang(lang)
     catalog = Catalog(root=root)
     if builtin_only:
         manifests = catalog.load_builtin()
-        scope = "built-in reference plugins"
+        scope = message("scope_builtin", output_lang)
     elif include_builtin:
         manifests = catalog.load_all()
-        scope = "all plugins"
+        scope = message("scope_all", output_lang)
     else:
         manifests = catalog.load_user()
-        scope = "user plugins"
+        scope = message("scope_user", output_lang)
     if not manifests:
-        print(f"No {scope} found.")
+        print(message("no_plugins_found", output_lang, scope=scope))
         if not include_builtin and not builtin_only:
-            print("Create one with: new <plugin_id>")
-            print("Show built-in examples with: list --all")
+            print(message("create_one", output_lang))
+            print(message("show_builtin", output_lang))
         return 0
 
     rows = [[m.plugin_id, m.name, m.version, m.payload.get("source_root", "")] for m in manifests]
-    print(render_table(["plugin_id", "name", "version", "source_root"], rows))
+    print(render_table(["plugin_id", text("name", output_lang), text("version", output_lang), text("source_root", output_lang)], rows))
     return 0
 
 
-def cmd_list_one(root: Path, plugin_id: str) -> int:
+def cmd_list_one(root: Path, plugin_id: str, *, lang: str | None = None) -> int:
+    output_lang = normalize_lang(lang)
     cmd_inspect(root, plugin_id)
     records = [record for record in StateStore(root).all() if record.plugin_id == plugin_id]
     if records:
-        print("Recent actions:")
+        print(message("recent_actions", output_lang))
         print(
             render_table(
-                ["plugin_id", "action", "ok", "version", "stage", "returncode", "duration_ms", "stdout", "stderr", "timestamp", "detail"],
+                [
+                    "plugin_id",
+                    text("action", output_lang),
+                    text("ok", output_lang),
+                    text("version", output_lang),
+                    text("stage", output_lang),
+                    text("returncode", output_lang),
+                    text("duration_ms", output_lang),
+                    text("stdout", output_lang),
+                    text("stderr", output_lang),
+                    text("timestamp", output_lang),
+                    text("detail", output_lang),
+                ],
                 latest_by_plugin_action(records),
             )
         )
     else:
-        print("Recent actions: none")
+        print(message("recent_actions_none", output_lang))
     return 0
 
 
-def cmd_add(root: Path, plugin_path: Path) -> int:
+def cmd_add(root: Path, plugin_path: Path, *, lang: str | None = None) -> int:
+    output_lang = normalize_lang(lang)
     manifest, catalog_path = Catalog(root=root).add_user_plugin(plugin_path)
-    print(f"Registered plugin: {manifest.plugin_id}")
-    print(f"Manifest: {manifest.path}")
-    print(f"Plugin root: {manifest.project_root}")
-    print(f"User catalog: {catalog_path}")
-    print("Next: plugin_ctl list")
+    print(message("registered_plugin", output_lang, plugin_id=manifest.plugin_id))
+    print(message("manifest", output_lang, path=manifest.path))
+    print(message("plugin_root", output_lang, path=manifest.project_root))
+    print(message("user_catalog", output_lang, path=catalog_path))
+    print(message("next_list", output_lang))
     return 0
 
 
-def cmd_remove(root: Path, plugin_id: str) -> int:
+def cmd_remove(root: Path, plugin_id: str, *, lang: str | None = None) -> int:
+    output_lang = normalize_lang(lang)
     catalog = Catalog(root=root)
     entry = catalog.user_plugin_entry(plugin_id)
     catalog_path = catalog.remove_user_plugin(plugin_id)
     removed_package_cache = catalog.remove_local_package_cache(plugin_id)
-    print(f"Removed user plugin: {plugin_id}")
+    print(message("removed_user_plugin", output_lang, plugin_id=plugin_id))
     if entry.get("root"):
-        print(f"Plugin root: {entry['root']}")
+        print(message("plugin_root", output_lang, path=entry["root"]))
     if entry.get("manifest"):
-        print(f"Manifest: {entry['manifest']}")
-    print(f"Re-add: plugin_ctl add {entry.get('root') or entry.get('manifest')}")
-    print(f"User catalog: {catalog_path}")
+        print(message("manifest", output_lang, path=entry["manifest"]))
+    print(message("re_add", output_lang, path=entry.get("root") or entry.get("manifest")))
+    print(message("user_catalog", output_lang, path=catalog_path))
     if removed_package_cache:
-        print("Local package metadata cache: removed")
+        print(message("local_cache_removed", output_lang))
     else:
-        print("Local package metadata cache: not found")
-    print("Database objects and distributed extension files were not removed.")
+        print(message("local_cache_not_found", output_lang))
+    print(message("database_not_removed", output_lang))
     return 0
 
 
@@ -481,15 +530,16 @@ def cmd_dev_init(plugin_id: str, *, base_dir: Path | None = None, force: bool = 
     return 0
 
 
-def cmd_new(root: Path, plugin_id: str) -> int:
+def cmd_new(root: Path, plugin_id: str, *, lang: str | None = None) -> int:
+    output_lang = normalize_lang(lang)
     result = create_plugin_skeleton(plugin_id)
     manifest, catalog_path = Catalog(root=root).add_user_plugin(result.target_dir)
-    print(f"Plugin created and added: {manifest.plugin_id}")
-    print(f"Path: {_display_path(result.target_dir)}")
-    print(f"Manifest: {manifest.path}")
-    print(f"User catalog: {catalog_path}")
+    print(message("plugin_created", output_lang, plugin_id=manifest.plugin_id))
+    print(message("path", output_lang, path=_display_path(result.target_dir)))
+    print(message("manifest", output_lang, path=manifest.path))
+    print(message("user_catalog", output_lang, path=catalog_path))
     print()
-    print("Next:")
+    print(message("next", output_lang))
     print(f"  deploy {manifest.plugin_id}")
     print(f"  register {manifest.plugin_id}")
     print(f"  check {manifest.plugin_id}")
@@ -537,21 +587,75 @@ def cmd_cluster_status() -> int:
     return 0 if all(check.ok for check in checks) else 1
 
 
+def _discover_cluster_for_init(args: argparse.Namespace) -> tuple[ClusterConfig, str, str]:
+    if args.backend in {"auto", "opentenbase_ctl"}:
+        backend = OpenTenBaseCtlBackend(binary=args.opentenbase_ctl, config_file=args.opentenbase_ctl_config)
+        try:
+            ctl_config = backend.discover_cluster_config(
+                name=args.name if args.name != "local-opentenbase" else None,
+                ssh_user=args.ssh_user,
+                db_user=args.db_user,
+                database=args.database,
+                ssh_port=args.ssh_port,
+                lib_dir=args.lib_dir,
+                extension_dir=args.extension_dir,
+            )
+            primary = ctl_config.coordinators[0] if ctl_config.coordinators else None
+            if primary is not None:
+                runtime = OpenTenBaseRuntime(
+                    host=primary.host,
+                    port=primary.db_port,
+                    user=args.db_user,
+                    database=args.database,
+                    mode="local",
+                )
+                try:
+                    sql_config = discover_cluster_config(
+                        runtime,
+                        name=ctl_config.name,
+                        ssh_user=args.ssh_user,
+                        db_user=args.db_user,
+                        database=args.database,
+                        ssh_port=args.ssh_port,
+                        lib_dir=primary.lib_dir,
+                        extension_dir=primary.extension_dir,
+                    )
+                    config = _merge_ctl_and_sql_topology(ctl_config, sql_config)
+                    return config, "opentenbase_ctl", "discovered from opentenbase_ctl status; topology verified from pgxc_node"
+                except (OSError, ValueError):
+                    if args.backend == "opentenbase_ctl":
+                        raise
+            return ctl_config, "opentenbase_ctl", "discovered from opentenbase_ctl status"
+        except OpenTenBaseCtlError:
+            if args.backend == "opentenbase_ctl":
+                raise
+
+    errors: list[str] = []
+    for host, port in [("127.0.0.1", 30004), ("127.0.0.1", 30005), ("127.0.0.1", 30006)]:
+        runtime = OpenTenBaseRuntime(host=host, port=port, user=args.db_user, database=args.database, mode="local")
+        try:
+            config = discover_cluster_config(
+                runtime,
+                name=args.name,
+                ssh_user=args.ssh_user,
+                db_user=args.db_user,
+                database=args.database,
+                ssh_port=args.ssh_port,
+                lib_dir=args.lib_dir,
+                extension_dir=args.extension_dir,
+            )
+            return config, "sql", f"discovered from pgxc_node through psql at {host}:{port}"
+        except (OSError, ValueError) as exc:
+            errors.append(f"{host}:{port}: {exc}")
+    raise ValueError("; ".join(errors) or "failed to discover OpenTenBase topology")
+
+
 def cmd_cluster_init(args: argparse.Namespace) -> int:
-    runtime = OpenTenBaseRuntime()
-    config = discover_cluster_config(
-        runtime,
-        name=args.name,
-        ssh_user=args.ssh_user,
-        db_user=args.db_user,
-        database=args.database,
-        ssh_port=args.ssh_port,
-        lib_dir=args.lib_dir,
-        extension_dir=args.extension_dir,
-    )
+    config, backend_name, backend_detail = _discover_cluster_for_init(args)
     target = write_cluster_config(config, args.output or default_cluster_config_path())
     print(f"Cluster config initialized: {target}")
     print(f"Cluster: {config.name}")
+    print(f"Backend: {backend_name} ({backend_detail})")
     rows = [
         [
             node.name,
@@ -588,11 +692,18 @@ def _node_json(node: ClusterNode) -> dict[str, object]:
 def _cluster_inspect_json(config: ClusterConfig) -> dict[str, object]:
     return {
         "cluster": config.name,
+        "backend": config.backend,
         "coordinators": [_node_json(node) for node in config.coordinators],
         "datanodes": [_node_json(node) for node in config.datanodes],
         "result": "OK",
         "errors": [],
     }
+
+
+def remote_executor_for_cluster(config: ClusterConfig):
+    if config.backend == "opentenbase_ctl":
+        return OpenTenBaseCtlRemoteExecutor()
+    return ScpSshRemoteExecutor()
 
 
 def _render_nodes(title: str, nodes: tuple[ClusterNode, ...]) -> str:
@@ -624,6 +735,7 @@ def cmd_cluster_inspect(cluster_file: Path, *, as_json: bool = False) -> int:
         print(json.dumps(_cluster_inspect_json(config), indent=2, ensure_ascii=False))
         return 0
     print(f"Cluster: {config.name}")
+    print(f"Backend: {config.backend}")
     print(_render_nodes("Coordinators", config.coordinators))
     print(_render_nodes("Datanodes", config.datanodes))
     print("Result: OK")
@@ -778,7 +890,7 @@ def cmd_cluster_distribute(
         return 1
 
     payload_files = list(physical_payload_files(manifest))
-    results = distribute_payload_to_nodes(config, payload_files, ScpSshRemoteExecutor())
+    results = distribute_payload_to_nodes(config, payload_files, remote_executor_for_cluster(config))
     if as_json:
         print(json.dumps(_execute_distribution_json(config, plugin_id, results), indent=2, ensure_ascii=False))
         return 0 if all(result.ok for result in results) else 1
@@ -913,17 +1025,19 @@ def _aggregated_check_errors(lint_items: list[LintItem], precheck_items: list[Pr
 
 
 def cmd_check(root: Path, plugin_id: str, *, as_json: bool = False, lang: str | None = None) -> int:
+    cluster_path = find_cluster_config()
+    remote_executor = remote_executor_for_cluster(load_cluster_config(cluster_path)) if cluster_path else ScpSshRemoteExecutor()
     report = build_plugin_health_report(
         root,
         plugin_id,
         runtime=OpenTenBaseRuntime(),
         sql_executor=PsqlCoordinatorExecutor(),
-        remote_executor=ScpSshRemoteExecutor(),
+        remote_executor=remote_executor,
     )
     if as_json:
         print(json.dumps(health_report_json(report), indent=2, ensure_ascii=False))
     else:
-        print(render_health_report(report))
+        print(render_health_report(report, normalize_lang(lang)))
     return 1 if report.final_status == "BROKEN" else 0
 
 
@@ -1165,7 +1279,7 @@ def _render_distributed_verify_report(report) -> None:
 def cmd_verify_distributed(root: Path, plugin_id: str, cluster_file: Path, *, as_json: bool = False) -> int:
     config = load_cluster_config(cluster_file)
     manifest = Catalog(root=root).load_one(plugin_id)
-    report = run_distributed_verify(config, manifest, PsqlCoordinatorExecutor(), ScpSshRemoteExecutor())
+    report = run_distributed_verify(config, manifest, PsqlCoordinatorExecutor(), remote_executor_for_cluster(config))
     if as_json:
         print(json.dumps(distributed_verify_report_json(report), indent=2, ensure_ascii=False))
     else:
@@ -1210,7 +1324,7 @@ def cmd_deploy_physical_distribution(
         print("Result: FAILED")
         return 1
 
-    executor = ScpSshRemoteExecutor()
+    executor = remote_executor_for_cluster(config)
     results = distribute_payload_to_nodes(config, list(physical_payload_files(manifest)), executor)
     metadata_results = sync_plugin_metadata_to_nodes(config, manifest, executor)
     all_results = [*results, *metadata_results]
@@ -1589,15 +1703,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "shell":
             return run_shell(args.root)
         if args.command == "add":
-            return cmd_add(args.root, args.plugin_path)
+            return cmd_add(args.root, args.plugin_path, lang=args.lang)
         if args.command == "remove":
-            return cmd_remove(args.root, args.plugin_id)
+            return cmd_remove(args.root, args.plugin_id, lang=args.lang)
         if args.command == "new":
-            return cmd_new(args.root, args.plugin_id)
+            return cmd_new(args.root, args.plugin_id, lang=args.lang)
         if args.command == "list":
             if args.plugin_id:
-                return cmd_list_one(args.root, args.plugin_id)
-            return cmd_list(args.root, include_builtin=args.all, builtin_only=args.builtin)
+                return cmd_list_one(args.root, args.plugin_id, lang=args.lang)
+            return cmd_list(args.root, include_builtin=args.all, builtin_only=args.builtin, lang=args.lang)
         if args.command == "inspect":
             return cmd_inspect(args.root, args.plugin_id)
         if args.command == "check":

@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from plugin_ctl.cli import main
-from plugin_ctl.cluster import ClusterNode
+from plugin_ctl.cluster import ClusterConfig, ClusterNode
 from plugin_ctl.runtime.opentenbase import RemoteCommandResult
 
 
@@ -87,18 +87,46 @@ class ClusterCliTest(unittest.TestCase):
     def test_cluster_init_writes_default_config_from_pgxc_node(self) -> None:
         output_file = Path(self.tempdir.name) / "generated.toml"
         with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeInitRuntime()):
-            code, output = self._run(["cluster", "init", "--output", str(output_file)])
+            code, output = self._run(["cluster", "init", "--backend", "sql", "--output", str(output_file)])
 
         self.assertEqual(code, 0)
         self.assertTrue(output_file.exists())
         self.assertIn("Cluster config initialized:", output)
         self.assertIn("cn001", output)
         self.assertIn("dn001", output)
+        self.assertIn("Backend: sql", output)
+
+    def test_cluster_init_prefers_opentenbase_ctl_backend(self) -> None:
+        output_file = Path(self.tempdir.name) / "generated-from-otbctl.toml"
+        with patch("plugin_ctl.cli.OpenTenBaseCtlBackend", return_value=FakeOpenTenBaseCtlBackend()):
+            code, output = self._run(["cluster", "init", "--output", str(output_file)])
+
+        self.assertEqual(code, 0)
+        self.assertTrue(output_file.exists())
+        self.assertIn("Backend: opentenbase_ctl", output)
+        text = output_file.read_text(encoding="utf-8")
+        self.assertIn('name = "cn0001"', text)
+        self.assertIn('host = "192.168.244.130"', text)
+
+    def test_cluster_init_verifies_opentenbase_ctl_topology_with_pgxc_node(self) -> None:
+        output_file = Path(self.tempdir.name) / "generated-verified.toml"
+        with patch("plugin_ctl.cli.OpenTenBaseCtlBackend", return_value=FakeOpenTenBaseCtlBackend()):
+            with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeInitRuntime()):
+                code, output = self._run(["cluster", "init", "--output", str(output_file)])
+
+        self.assertEqual(code, 0)
+        self.assertIn("topology verified from pgxc_node", output)
+        text = output_file.read_text(encoding="utf-8")
+        self.assertIn('backend = "opentenbase_ctl"', text)
+        self.assertIn('name = "cn0001"', text)
+        self.assertIn("db_port = 30004", text)
+        self.assertIn('name = "dn0001"', text)
+        self.assertIn("db_port = 20008", text)
 
     def test_top_level_init_alias_writes_config(self) -> None:
         output_file = Path(self.tempdir.name) / "top-level-generated.toml"
         with patch("plugin_ctl.cli.OpenTenBaseRuntime", return_value=FakeInitRuntime()):
-            code, output = self._run(["init", "--output", str(output_file)])
+            code, output = self._run(["init", "--backend", "sql", "--output", str(output_file)])
 
         self.assertEqual(code, 0)
         self.assertTrue(output_file.exists())
@@ -355,3 +383,39 @@ class FakeInitRuntime:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeOpenTenBaseCtlBackend:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def discover_cluster_config(self, **kwargs) -> ClusterConfig:
+        return ClusterConfig(
+            name="pluginctl_current",
+            nodes=(
+                ClusterNode(
+                    name="cn0001",
+                    role="cn",
+                    host="192.168.244.130",
+                    ssh_port=22,
+                    db_port=30004,
+                    ssh_user="opentenbase",
+                    db_user="opentenbase",
+                    database="postgres",
+                    lib_dir="/data/opentenbase/install/opentenbase/5.21.8.11/lib/postgresql",
+                    extension_dir="/data/opentenbase/install/opentenbase/5.21.8.11/share/postgresql/extension",
+                ),
+                ClusterNode(
+                    name="dn0001",
+                    role="dn",
+                    host="192.168.244.130",
+                    ssh_port=22,
+                    db_port=20008,
+                    ssh_user="opentenbase",
+                    db_user="opentenbase",
+                    database="postgres",
+                    lib_dir="/data/opentenbase/install/opentenbase/5.21.8.11/lib/postgresql",
+                    extension_dir="/data/opentenbase/install/opentenbase/5.21.8.11/share/postgresql/extension",
+                ),
+            ),
+        )

@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import io
 import subprocess
+import sys
+import tempfile
+import types
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
 from plugin_ctl.cli import main
-from plugin_ctl.shell import run_shell, translate_shell_command
+from plugin_ctl.shell import run_shell, setup_history, translate_shell_command
 
 
 class FakeLocalRuntime:
@@ -122,6 +125,45 @@ class PluginCtlShellTest(unittest.TestCase):
         self.assertNotIn("plugin lint", text)
         self.assertIn('Unknown command. Type "help" to show commands.', text)
         self.assertEqual(calls, [])
+
+    def test_language_switch_help_and_unknown_command(self) -> None:
+        output = io.StringIO()
+
+        code = run_shell(
+            self.root,
+            dispatcher=lambda argv: 0,
+            input_func=self._input(["help", "CN", "help", "wat", "EN", "help", "wat", "quit"]),
+            output=output,
+        )
+
+        self.assertEqual(code, 0)
+        text = output.getvalue()
+        self.assertIn("Available commands:", text)
+        self.assertIn("已切换到中文。", text)
+        self.assertIn("可用命令：", text)
+        self.assertIn('未知命令。输入 "help" 查看命令。', text)
+        self.assertIn("Language switched to English.", text)
+        self.assertIn('Unknown command. Type "help" to show commands.', text)
+
+    def test_lowercase_language_switches_work(self) -> None:
+        output = io.StringIO()
+
+        code = run_shell(self.root, dispatcher=lambda argv: 0, input_func=self._input(["cn", "en", "quit"]), output=output)
+
+        self.assertEqual(code, 0)
+        text = output.getvalue()
+        self.assertIn("已切换到中文。", text)
+        self.assertIn("Language switched to English.", text)
+
+    def test_help_command_specific_output_is_localized(self) -> None:
+        output = io.StringIO()
+
+        code = run_shell(self.root, dispatcher=lambda argv: 0, input_func=self._input(["help deploy", "CN", "help deploy", "quit"]), output=output)
+
+        self.assertEqual(code, 0)
+        text = output.getvalue()
+        self.assertIn("deploy: Copy plugin files", text)
+        self.assertIn("deploy: 把插件文件复制", text)
 
     def test_quit_exits_shell(self) -> None:
         output = io.StringIO()
@@ -240,6 +282,17 @@ class PluginCtlShellTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("Command exited with status 2.", output.getvalue())
 
+    def test_system_exit_message_is_localized_after_cn(self) -> None:
+        output = io.StringIO()
+
+        def dispatch(argv: list[str]) -> int:
+            raise SystemExit(2)
+
+        code = run_shell(self.root, dispatcher=dispatch, input_func=self._input(["CN", "list", "quit"]), output=output)
+
+        self.assertEqual(code, 0)
+        self.assertIn("命令退出，状态码 2。", output.getvalue())
+
     def test_regular_exception_does_not_leave_shell(self) -> None:
         output = io.StringIO()
         calls: list[list[str]] = []
@@ -341,7 +394,80 @@ class PluginCtlShellTest(unittest.TestCase):
                 check_code = main(["--root", str(self.root), "check", "pluginctl_smoke_plugin"])
 
         self.assertEqual(check_code, 0)
-        self.assertIn("结果: READY", check_output.getvalue())
+        self.assertIn("Result: READY", check_output.getvalue())
+
+    def test_shell_language_passes_to_list(self) -> None:
+        output = io.StringIO()
+        calls: list[list[str]] = []
+
+        code = run_shell(
+            self.root,
+            dispatcher=lambda argv: calls.append(argv) or 0,
+            input_func=self._input(["CN", "list", "quit"]),
+            output=output,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, [["--root", str(self.root), "list", "--lang", "zh"]])
+
+    def test_history_records_non_empty_non_duplicate_commands(self) -> None:
+        class FakeReadline:
+            def __init__(self) -> None:
+                self.items: list[str] = []
+                self.auto_history = True
+
+            def read_history_file(self, path: str) -> None:
+                if Path(path).exists():
+                    self.items.extend(Path(path).read_text(encoding="utf-8").splitlines())
+
+            def write_history_file(self, path: str) -> None:
+                Path(path).write_text("\n".join(self.items) + ("\n" if self.items else ""), encoding="utf-8")
+
+            def get_current_history_length(self) -> int:
+                return len(self.items)
+
+            def get_history_item(self, index: int) -> str:
+                return self.items[index - 1]
+
+            def set_auto_history(self, enabled: bool) -> None:
+                self.auto_history = enabled
+
+            def add_history(self, item: str) -> None:
+                self.items.append(item)
+
+        fake = FakeReadline()
+        with tempfile.TemporaryDirectory() as tmp:
+            history_path = Path(tmp) / "history"
+            with patch.dict(sys.modules, {"readline": fake}):
+                run_shell(
+                    self.root,
+                    dispatcher=lambda argv: 0,
+                    input_func=self._input(["", "list", "list", "help", "quit"]),
+                    output=io.StringIO(),
+                    history_path=history_path,
+                )
+
+            self.assertEqual(history_path.read_text(encoding="utf-8").splitlines(), ["list", "help", "quit"])
+
+    def test_history_failure_does_not_break_shell(self) -> None:
+        fake = types.SimpleNamespace(
+            read_history_file=lambda path: (_ for _ in ()).throw(OSError("no history")),
+            write_history_file=lambda path: (_ for _ in ()).throw(OSError("no history")),
+            get_current_history_length=lambda: 0,
+            set_auto_history=lambda enabled: None,
+            add_history=lambda item: (_ for _ in ()).throw(OSError("no history")),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(sys.modules, {"readline": fake}):
+                history = setup_history(Path(tmp) / "history")
+                history.record("list")
+                history.save()
+
+        output = io.StringIO()
+        with patch.dict(sys.modules, {"readline": fake}):
+            code = run_shell(self.root, dispatcher=lambda argv: 0, input_func=self._input(["list", "quit"]), output=output)
+
+        self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":

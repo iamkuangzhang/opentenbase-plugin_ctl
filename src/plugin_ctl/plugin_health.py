@@ -139,30 +139,66 @@ def health_report_json(report: PluginHealthReport) -> dict[str, Any]:
     }
 
 
-def render_health_report(report: PluginHealthReport) -> str:
+SECTION_TITLES_EN = [
+    "Plugin package structure",
+    "Extension files",
+    "PluginCtl management state",
+    "OpenTenBase cluster config",
+    "Distributed deployment state",
+    "Registration and verification state",
+]
+
+
+def _health_next_step(report: PluginHealthReport, lang: str) -> str:
+    if lang != "en":
+        return report.next_step
+    if report.final_status == "BROKEN":
+        return "Fix manifest, SQL/control files, or plugin package structure first."
+    if report.final_status == "NEW":
+        return "The plugin directory can be checked, but is not in the catalog yet; next run deploy <path>."
+    if report.final_status == "REMOVED":
+        return "The plugin was rolled back and removed verification passed; run deploy and register to use it again."
+    if report.final_status == "REGISTERED":
+        return "The plugin is registered and verified; continue with report or business tests."
+    if report.final_status == "DEPLOYED":
+        return "Plugin files are distributed; next run register <plugin_id>."
+    if report.final_status == "READY":
+        return "The plugin package is basically ready; run init to generate the default cluster.toml, then deploy."
+    return report.next_step
+
+
+def render_health_report(report: PluginHealthReport, lang: str = "en") -> str:
+    english = lang == "en"
     lines = [
-        f"插件: {report.plugin_id}",
-        f"版本: {report.version or '-'}",
+        f"{'Plugin' if english else '插件'}: {report.plugin_id}",
+        f"{'Version' if english else '版本'}: {report.version or '-'}",
         f"manifest: {report.manifest_path or '-'}",
         "",
     ]
     for index, section in enumerate(report.sections, start=1):
-        lines.append(f"[{index}/6] {section.title}")
+        title = SECTION_TITLES_EN[index - 1] if english and index - 1 < len(SECTION_TITLES_EN) else section.title
+        lines.append(f"[{index}/6] {title}")
         if not section.items:
-            lines.append("  - [SKIP] 无可检查项目")
+            lines.append("  - [SKIP] no check items" if english else "  - [SKIP] 无可检查项目")
         for item in section.items:
             lines.append(f"  - [{item.status}] {item.name}: {item.detail}")
         lines.append("")
 
-    lines.append("最近操作:")
+    lines.append("Recent actions:" if english else "最近操作:")
     if report.recent_actions:
         for action in report.recent_actions:
             ok = "OK" if action.get("ok") else "FAIL"
             detail = str(action.get("detail", "")).replace("\n", " ")[:120]
             lines.append(f"  - {action.get('action')}: {ok} {action.get('timestamp', '')} {detail}")
     else:
-        lines.append("  - 无记录")
-    lines.extend(["", f"结果: {report.final_status}", f"下一步: {report.next_step}"])
+        lines.append("  - none" if english else "  - 无记录")
+    lines.extend(
+        [
+            "",
+            f"{'Result' if english else '结果'}: {report.final_status}",
+            f"{'Next' if english else '下一步'}: {_health_next_step(report, lang)}",
+        ]
+    )
     return "\n".join(lines)
 
 

@@ -1,72 +1,13 @@
 from __future__ import annotations
 
+import atexit
 from collections.abc import Callable
 from pathlib import Path
 import shlex
 import sys
 from typing import TextIO
 
-
-SHELL_BANNER = """OpenTenBase PluginCtl Shell
-Type "help" to show commands.
-Type "quit" or "exit" to leave.
-"""
-
-
-HELP_TEXT = """Available commands:
-  help
-  help advanced
-  init
-  new <plugin_id>
-  list [plugin_id]
-  list --all
-  deploy <plugin_id_or_path>
-  register <plugin_id>
-  check <plugin_id_or_path>
-  rollback <plugin_id> [options]
-  quit
-  exit
-
-PluginCtl Shell manages plugin discovery, checks, deployment, registration,
-rollback, and reports. "init" only initializes PluginCtl's cluster.toml from a
-running OpenTenBase cluster; it does not start, stop, initialize, or monitor an
-OpenTenBase cluster.
-"""
-
-
-ADVANCED_HELP_TEXT = """Advanced and compatibility commands:
-  add <plugin_dir_or_manifest>
-  remove <plugin_id>
-  inspect <plugin_id>
-  assess <pg_extension_source_path> [--json]
-  diagnose <plugin_id>
-  activate <plugin_id> [options]
-  verify <plugin_id> [options]
-  state [plugin_id]
-  report [options]
-  doctor
-  dev init <plugin_id> [--dir <target_dir>] [--force]
-
-  plugin add <plugin_dir_or_manifest>
-  plugin remove <plugin_id>
-  plugin check <plugin_id>
-  plugin status <plugin_id>
-  plugin lint <plugin_id>
-  plugin plan <plugin_id>
-  plugin precheck <plugin_id>
-  plugin diagnose <plugin_id>
-  plugin roles <plugin_id>
-  plugin consistency <plugin_id>
-  plugin archive list
-  plugin archive inspect <plugin_id>
-  plugins status [--json]
-
-Cluster and distributed plugin commands:
-  cluster status
-  cluster init
-  cluster inspect
-  cluster distribute <plugin_id> [--dry-run]
-"""
+from .i18n import command_help, message, normalize_lang
 
 
 TOP_LEVEL_COMMANDS = {
@@ -96,6 +37,64 @@ PROGRAM_NAMES = {"plugin_ctl", "opentenbase-pluginctl"}
 
 Dispatcher = Callable[[list[str]], int]
 InputFunc = Callable[[str], str]
+
+
+class ShellHistory:
+    def __init__(self, history_path: Path | None = None) -> None:
+        self.path = history_path or Path.home() / ".plugin_ctl" / "history"
+        self.readline = None
+        try:
+            import readline  # type: ignore[import-not-found]
+
+            self.readline = readline
+        except Exception:
+            self.readline = None
+        self.enabled = self.readline is not None
+        self._last_recorded = ""
+
+    def load(self) -> None:
+        if not self.enabled or self.readline is None:
+            return
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            if self.path.exists():
+                self.readline.read_history_file(str(self.path))
+                length = self.readline.get_current_history_length()
+                if length > 0:
+                    self._last_recorded = self.readline.get_history_item(length) or ""
+            if hasattr(self.readline, "set_auto_history"):
+                self.readline.set_auto_history(False)
+        except Exception:
+            self.enabled = False
+
+    def save(self) -> None:
+        if not self.enabled or self.readline is None:
+            return
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.readline.write_history_file(str(self.path))
+        except Exception:
+            pass
+
+    def record(self, line: str) -> None:
+        stripped = line.strip()
+        if not stripped or stripped == self._last_recorded:
+            return
+        if not self.enabled or self.readline is None:
+            self._last_recorded = stripped
+            return
+        try:
+            self.readline.add_history(stripped)
+            self._last_recorded = stripped
+        except Exception:
+            self.enabled = False
+
+
+def setup_history(history_path: Path | None = None) -> ShellHistory:
+    history = ShellHistory(history_path)
+    history.load()
+    atexit.register(history.save)
+    return history
 
 
 def translate_shell_command(parts: list[str]) -> list[str] | None:
@@ -128,45 +127,51 @@ def _confirm(argv: list[str], input_func: InputFunc, out: TextIO) -> bool:
         return True
     command = argv[0]
     if command == "deploy":
-        print("PluginCtl will copy plugin files to OpenTenBase CN/DN nodes.", file=out)
-        cancel_message = "Deploy cancelled."
+        print(message("deploy_confirm", _confirm.lang), file=out)
+        cancel_message = message("deploy_cancelled", _confirm.lang)
     elif command == "register":
-        print("PluginCtl will execute CREATE EXTENSION on the primary coordinator.", file=out)
-        cancel_message = "Register cancelled."
+        print(message("register_confirm", _confirm.lang), file=out)
+        cancel_message = message("register_cancelled", _confirm.lang)
     elif command == "rollback":
-        print("PluginCtl will execute rollback SQL.", file=out)
-        cancel_message = "Rollback cancelled."
+        print(message("rollback_confirm", _confirm.lang), file=out)
+        cancel_message = message("rollback_cancelled", _confirm.lang)
     else:
-        cancel_message = "Cancelled."
-    answer = input_func("Continue? [y/N]: ").strip().lower()
+        cancel_message = message("cancelled", _confirm.lang)
+    answer = input_func(message("continue_prompt", _confirm.lang)).strip().lower()
     if answer in {"y", "yes"}:
         return True
     print(cancel_message, file=out)
     return False
 
 
+_confirm.lang = "en"  # type: ignore[attr-defined]
+
+
 def _preview_before_confirm(argv: list[str], root_args: list[str], dispatch: Dispatcher, out: TextIO) -> bool:
     if not _needs_confirmation(argv):
         return True
     preview_argv = [*root_args, *argv, "--dry-run"]
-    print("Preview:", file=out)
+    print(message("preview", _preview_before_confirm.lang), file=out)
     try:
         code = dispatch(preview_argv)
     except SystemExit as exc:
         code = int(exc.code or 0)
         if code:
-            print(f"Preview exited with status {code}.", file=out)
+            print(message("preview_exited", _preview_before_confirm.lang, code=code), file=out)
             return False
     except KeyboardInterrupt:
         print("", file=out)
         return False
     except Exception as exc:
-        print(f"Preview failed: {exc}", file=out)
+        print(message("preview_failed", _preview_before_confirm.lang, error=exc), file=out)
         return False
     if code:
-        print(f"Preview exited with status {code}.", file=out)
+        print(message("preview_exited", _preview_before_confirm.lang, code=code), file=out)
         return False
     return True
+
+
+_preview_before_confirm.lang = "en"  # type: ignore[attr-defined]
 
 
 def _default_dispatcher(argv: list[str]) -> int:
@@ -181,49 +186,71 @@ def run_shell(
     dispatcher: Dispatcher | None = None,
     input_func: InputFunc = input,
     output: TextIO | None = None,
+    history_path: Path | None = None,
 ) -> int:
     out = output or sys.stdout
     dispatch = dispatcher or _default_dispatcher
     root_args = ["--root", str(root)]
+    lang = "en"
+    history = setup_history(history_path)
 
-    print(SHELL_BANNER, file=out)
+    print(message("shell_banner", lang), file=out)
     while True:
+        _confirm.lang = lang  # type: ignore[attr-defined]
+        _preview_before_confirm.lang = lang  # type: ignore[attr-defined]
         try:
             raw_line = input_func("pluginctl> ")
         except EOFError:
             print("", file=out)
+            history.save()
             return 0
         except KeyboardInterrupt:
             print("", file=out)
+            history.save()
             return 0
 
         line = raw_line.strip()
         if not line:
             continue
+        history.record(line)
+        if line.lower() == "cn":
+            lang = "zh"
+            print(message("language_switched_zh", lang), file=out)
+            continue
+        if line.lower() == "en":
+            lang = "en"
+            print(message("language_switched_en", lang), file=out)
+            continue
         if line in {"quit", "exit"}:
+            history.save()
             return 0
         if line == "help":
-            print(HELP_TEXT, file=out)
+            print(message("shell_help", lang), file=out)
             continue
         if line == "help advanced":
-            print(ADVANCED_HELP_TEXT, file=out)
+            print(message("shell_advanced_help", lang), file=out)
+            continue
+        if line.startswith("help "):
+            command = line.split(maxsplit=1)[1].strip()
+            print(f"{command}: {command_help(command, lang)}", file=out)
             continue
         if line == "shell":
-            print("Already in PluginCtl Shell.", file=out)
+            print(message("already_in_shell", lang), file=out)
             continue
 
         try:
             parts = shlex.split(line)
         except ValueError as exc:
-            print(f"Invalid command: {exc}", file=out)
+            print(message("invalid_command", lang, error=exc), file=out)
             continue
 
         argv = translate_shell_command(parts)
         if argv is None:
-            print('Unknown command. Type "help" to show commands.', file=out)
+            print(message("unknown_command", lang), file=out)
             continue
         if not argv:
             continue
+        argv = _with_shell_language(argv, lang)
         if not _preview_before_confirm(argv, root_args, dispatch, out):
             continue
         if not _confirm(argv, input_func, out):
@@ -233,11 +260,26 @@ def run_shell(
             dispatch([*root_args, *argv])
         except SystemExit as exc:
             if exc.code not in (None, 0):
-                print(f"Command exited with status {exc.code}.", file=out)
+                print(message("command_exited", lang, code=exc.code), file=out)
             continue
         except KeyboardInterrupt:
             print("", file=out)
             continue
         except Exception as exc:
-            print(f"Command failed: {exc}", file=out)
+            print(message("command_failed", lang, error=exc), file=out)
             continue
+
+
+def _with_shell_language(argv: list[str], lang: str) -> list[str]:
+    if normalize_lang(lang) == "en":
+        return argv
+    if "--json" in argv or "--lang" in argv:
+        return argv
+    command = argv[0]
+    if command in {"list", "add", "remove", "new", "check"}:
+        return [*argv, "--lang", "zh"]
+    if command == "plugin" and len(argv) > 1 and argv[1] in {"check", "status", "lint", "plan", "precheck", "diagnose"}:
+        return [*argv, "--lang", "zh"]
+    if command == "plugins" and len(argv) > 1 and argv[1] == "status":
+        return [*argv, "--lang", "zh"]
+    return argv

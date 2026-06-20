@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from plugin_ctl.cluster import discover_cluster_config, load_cluster_config, render_cluster_config, run_cluster_status
+from plugin_ctl.opentenbase_ctl_backend import OpenTenBaseCtlBackend
 
 
 class MockRuntime:
@@ -210,6 +211,37 @@ lib_dir = "/opt/otb/lib"
 
         self.assertEqual(loaded.name, "roundtrip")
         self.assertEqual(len(loaded.nodes), 4)
+
+
+class OpenTenBaseCtlBackendTest(unittest.TestCase):
+    STATUS_OUTPUT = """
+ ------------- Instance status -----------
+Instance name: pluginctl_current
+Version: v5.21.8.11
+
+ -------------- Node status --------------
+Node dn0002(192.168.244.132:20009) is Running
+Node cn0002(192.168.244.132:30005) is Running
+Node gtm0001(192.168.244.130:6666) is Running
+Node dn0001(192.168.244.130:20008) is Running
+Node cn0001(192.168.244.130:30004) is Running
+[Result] Total: 5, Running: 5, Stopped: 0, Unknown: 0
+
+ ------- Master CN Connection Info -------
+[1] cn0001(192.168.244.130)
+Environment variable: export LD_LIBRARY_PATH=/data/opentenbase/install/opentenbase/5.21.8.11/lib  && export PATH=/data/opentenbase/install/opentenbase/5.21.8.11/bin:${PATH}
+PSQL connection: psql -h 192.168.244.130 -p 30004 -U opentenbase postgres
+"""
+
+    def test_parse_status_extracts_cn_dn_nodes_and_install_prefix(self) -> None:
+        status = OpenTenBaseCtlBackend(binary="opentenbase_ctl").parse_status(self.STATUS_OUTPUT)
+
+        self.assertEqual(status.instance_name, "pluginctl_current")
+        self.assertEqual(status.version, "5.21.8.11")
+        self.assertEqual(status.install_prefix, "/data/opentenbase/install/opentenbase/5.21.8.11")
+        self.assertEqual([node.name for node in status.nodes], ["dn0002", "cn0002", "dn0001", "cn0001"])
+        self.assertEqual([node.role for node in status.nodes], ["dn", "cn", "dn", "cn"])
+        self.assertEqual(status.nodes[-1].db_port, 30004)
 
 
 if __name__ == "__main__":

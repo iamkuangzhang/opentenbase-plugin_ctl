@@ -12,6 +12,13 @@ The public entrypoint is:
 plugin_ctl
 ```
 
+Current version:
+
+```bash
+plugin_ctl --version
+# plugin_ctl 1.0.0
+```
+
 ## Install
 
 ```bash
@@ -35,9 +42,17 @@ For normal use, enter the interactive shell first:
 plugin_ctl
 ```
 
+The shell defaults to English. It keeps command history in `~/.plugin_ctl/history`,
+so the up/down arrow keys can browse previous commands, even after you exit and
+enter the shell again. Type `CN` to switch the current session to Chinese, and
+type `EN` to switch back to English. Command names stay in English.
+
 Then use the short commands:
 
 ```text
+pluginctl> help
+pluginctl> CN
+pluginctl> EN
 pluginctl> init
 pluginctl> new my_plugin
 pluginctl> list
@@ -48,7 +63,16 @@ pluginctl> check my_plugin
 pluginctl> quit
 ```
 
-`init` reads the current running OpenTenBase topology and writes PluginCtl's default `cluster.toml`. It does not start, stop, initialize, or monitor the OpenTenBase cluster.
+`init` reads the current running OpenTenBase topology and writes PluginCtl's default `cluster.toml`. It prefers `opentenbase_ctl status` when available, and falls back to direct SQL discovery through `pgxc_node` for compatibility. It does not start, stop, initialize, or monitor the OpenTenBase cluster.
+
+Recommended cluster workflow:
+
+```bash
+su - opentenbase
+opentenbase_ctl start
+opentenbase_ctl status
+plugin_ctl
+```
 
 ## Use an Existing Plugin Directory
 
@@ -69,6 +93,8 @@ Inside `plugin_ctl` shell:
 
 ```text
 help
+help advanced
+help <command>
 init
 new <plugin_id>
 list [plugin_id]
@@ -79,6 +105,8 @@ check <plugin_id_or_path>
 rollback <plugin_id>
 quit
 exit
+CN
+EN
 ```
 
 Use `help advanced` for compatibility and debugging commands.
