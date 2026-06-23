@@ -42,6 +42,13 @@ plugin_ctl --help
 plugin_ctl list
 ```
 
+## 教程
+
+完整中文教程可以阅读：
+
+- 腾讯云开发者平台：<https://cloud.tencent.com/developer/article/2694380>
+- CSDN：<https://blog.csdn.net/2501_90201337/article/details/162160995>
+
 ## 主流程
 
 普通用户建议先进入交互式控制台：

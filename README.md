@@ -42,6 +42,13 @@ plugin_ctl --help
 plugin_ctl list
 ```
 
+## Tutorial
+
+A step-by-step Chinese tutorial is available here:
+
+- Tencent Cloud Developer Platform: <https://cloud.tencent.com/developer/article/2694380>
+- CSDN: <https://blog.csdn.net/2501_90201337/article/details/162160995>
+
 ## Main Shell Flow
 
 For normal use, enter the interactive shell first:
